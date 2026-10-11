@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+/*
+ * WonderImport visual system — see docs/PHASE-0-DECISIONS.md §7.
+ * Semantic tokens live on :root so light and dark themes share one set of utilities.
+ */
+:root {
+  --harbour: #12283a;
+  --harbour-2: #1b3a52;
+  --fjord: #17697a;
+  --fjord-strong: #0f5562;
+  --tide: #247096;
+  --glacier: #e6f0f3;
+  --mist: #f3f6f8;
+  --surface: #ffffff;
+  --line: #dce4ea;
+  --line-soft: #ebf0f3;
+  --ink: #12283a;
+  --ink-2: #4a5f70;
+  --ink-3: #5d6a75;
+  --mint: #20765f;
+  --mint-bg: #e5f4ef;
+  --rose: #b4405c;
+  --rose-bg: #f9e8ec;
+  --amber: #8f5e18;
+  --amber-bg: #fbf3e4;
+  --side-text: #b9c9d6;
+  /* Text on fjord/rose fills (primary and danger buttons) */
+  --on-accent: #ffffff;
+
+  --st-ordered: #8a9aab;
+  --st-supplier: #6c7fd8;
+  --st-china: #8b6fc9;
+  --st-transit: #2e8fc0;
+  --st-arrived: #1f9e9a;
+  --st-delivered: #2a9d7f;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --harbour: #0a151e;
+    --harbour-2: #14283a;
+    --fjord: #3fa7b5;
+    --fjord-strong: #5cbac6;
+    --glacier: #18303d;
+    --mist: #0e1a24;
+    --surface: #14232f;
+    --line: #243746;
+    --line-soft: #1c2d3a;
+    --ink: #e4edf3;
+    --ink-2: #a9bbc8;
+    --ink-3: #859aaa;
+    --tide: #4da0c9;
+    --mint: #41a88d;
+    --rose: #d57f93;
+    --amber: #c38e43;
+    --on-accent: #0a151e;
+    --mint-bg: #15342d;
+    --rose-bg: #3a1c25;
+    --amber-bg: #2e2516;
+    --side-text: #a3b6c4;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --harbour: #0a151e;
+  --harbour-2: #14283a;
+  --fjord: #3fa7b5;
+  --fjord-strong: #5cbac6;
+  --glacier: #18303d;
+  --mist: #0e1a24;
+  --surface: #14232f;
+  --line: #243746;
+  --line-soft: #1c2d3a;
+  --ink: #e4edf3;
+  --ink-2: #a9bbc8;
+  --ink-3: #859aaa;
+  --tide: #4da0c9;
+  --mint: #41a88d;
+  --rose: #d57f93;
+  --amber: #c38e43;
+  --on-accent: #0a151e;
+  --mint-bg: #15342d;
+  --rose-bg: #3a1c25;
+  --amber-bg: #2e2516;
+  --side-text: #a3b6c4;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-harbour: var(--harbour);
+  --color-harbour-2: var(--harbour-2);
+  --color-fjord: var(--fjord);
+  --color-fjord-strong: var(--fjord-strong);
+  --color-tide: var(--tide);
+  --color-glacier: var(--glacier);
+  --color-mist: var(--mist);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-mint: var(--mint);
+  --color-mint-bg: var(--mint-bg);
+  --color-rose: var(--rose);
+  --color-rose-bg: var(--rose-bg);
+  --color-amber: var(--amber);
+  --color-amber-bg: var(--amber-bg);
+  --color-side-text: var(--side-text);
+  --color-on-accent: var(--on-accent);
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --radius-panel: 12px;
+  --radius-control: 8px;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    background: var(--mist);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--tide);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--tide) 25%, transparent);
+  }
+}
+
+@layer components {
+  /* Status badge: dot + text, coloured by --c (never colour alone). */
+  .badge-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.5;
+    padding: 1px 9px 1px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+    background: color-mix(in srgb, var(--c) 13%, transparent);
+    color: color-mix(in srgb, var(--c) 72%, var(--ink));
+  }
+  .badge-dot::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--c);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

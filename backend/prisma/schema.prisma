@@ -1,0 +1,340 @@
+// WonderImport data model.
+// Money: GHS, NUMERIC(14|16, 2). Unit cost: CNY, NUMERIC(14, 4). Rate: GHS per 1 CNY.
+// Connection URLs are configured in prisma.config.ts (Prisma 7).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────── Enums ─────────────────────────
+
+enum Role {
+  ADMIN
+  STAFF
+  VIEWER
+}
+
+enum ShipmentStatus {
+  ORDERED
+  AT_SUPPLIER
+  CHINA_WAREHOUSE
+  IN_TRANSIT
+  ARRIVED
+  DELIVERED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  ARCHIVE
+  RESTORE
+  DUPLICATE
+  STATUS_CHANGE
+  STATUS_CORRECTION
+  CHINA_CHECK_IN
+  PRICE_OVERRIDE
+  ACCOUNT_LINK
+  IMPORT
+  EXPORT
+}
+
+enum ImportBatchStatus {
+  VALIDATING
+  READY
+  COMMITTED
+  FAILED
+  CANCELLED
+}
+
+enum ImportRowState {
+  VALID
+  WARNING
+  INVALID
+  COMMITTED
+  SKIPPED
+}
+
+// ───────────────────────── People ─────────────────────────
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  /// Supabase auth.users.id — null until the person first signs in
+  authId    String?  @unique @map("auth_id") @db.Uuid
+  email     String   @unique
+  name      String
+  role      Role     @default(STAFF)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  goodsCreated     Good[]                  @relation("GoodCreatedBy")
+  goodsUpdated     Good[]                  @relation("GoodUpdatedBy")
+  priceOverrides   Good[]                  @relation("GoodOverriddenBy")
+  chinaCheckIns    Good[]                  @relation("GoodCheckedInBy")
+  statusChanges    GoodsStatusHistory[]
+  snapshots        GoodFinancialSnapshot[]
+  auditLogs        AuditLog[]
+  importBatches    ImportBatch[]
+  settingsUpdated  AppSetting[]
+
+  @@map("users")
+}
+
+// ───────────────────────── Master data ─────────────────────────
+
+model Client {
+  id         String    @id @default(uuid()) @db.Uuid
+  code       String    @unique
+  name       String
+  phone      String?
+  email      String?
+  address    String?
+  notes      String?
+  /// System client that holds goods bought as stock (no named buyer)
+  isStock    Boolean   @default(false) @map("is_stock")
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  goods Good[]
+
+  @@index([name])
+  @@map("clients")
+}
+
+model Supplier {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String    @unique
+  contactPerson String?   @map("contact_person")
+  phone         String?
+  email         String?
+  country       String    @default("China")
+  notes         String?
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  goods Good[]
+
+  @@map("suppliers")
+}
+
+model Category {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique
+  description String?
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  goods Good[]
+
+  @@map("categories")
+}
+
+// ───────────────────────── Goods ─────────────────────────
+
+model Good {
+  id             String  @id @default(uuid()) @db.Uuid
+  itemName       String  @map("item_name")
+  /// Parcel tracking / delivery ID. Not unique: one parcel can hold several items.
+  trackingNumber String? @map("tracking_number")
+  quantity       Int
+  quantitySold   Int     @default(0) @map("quantity_sold")
+
+  // Financial inputs (kept on the record so totals are reproducible)
+  unitCost        Decimal @map("unit_cost") @db.Decimal(14, 4) // CNY
+  exchangeRate    Decimal @map("exchange_rate") @db.Decimal(12, 6) // GHS per 1 CNY
+  priceMultiplier Decimal @default(3) @map("price_multiplier") @db.Decimal(6, 3)
+
+  // Prices (GHS per unit)
+  suggestedPrice  Decimal   @map("suggested_price") @db.Decimal(14, 2)
+  sellingPrice    Decimal   @map("selling_price") @db.Decimal(14, 2)
+  priceOverridden Boolean   @default(false) @map("price_overridden")
+  overrideReason  String?   @map("override_reason")
+  overriddenById  String?   @map("overridden_by_id") @db.Uuid
+  overriddenAt    DateTime? @map("overridden_at") @db.Timestamptz(6)
+  retailPrice     Decimal?  @map("retail_price") @db.Decimal(14, 2)
+
+  // Totals (GHS), written by the API on every change
+  totalCost       Decimal @map("total_cost") @db.Decimal(16, 2)
+  expectedRevenue Decimal @map("expected_revenue") @db.Decimal(16, 2)
+  profit          Decimal @db.Decimal(16, 2)
+  /// profit ÷ revenue × 100, null when revenue is zero. Stored so lists can sort by it.
+  margin          Decimal? @db.Decimal(9, 2)
+
+  // Shipment
+  status            ShipmentStatus @default(ORDERED)
+  chinaCheckedIn    Boolean        @default(false) @map("china_checked_in")
+  chinaCheckedInAt  DateTime?      @map("china_checked_in_at") @db.Timestamptz(6)
+  chinaCheckedInById String?       @map("china_checked_in_by_id") @db.Uuid
+
+  orderedAt           DateTime? @map("ordered_at") @db.Date
+  supplierReceivedAt  DateTime? @map("supplier_received_at") @db.Date
+  warehouseReceivedAt DateTime? @map("warehouse_received_at") @db.Date
+  departedAt          DateTime? @map("departed_at") @db.Date
+  arrivedAt           DateTime? @map("arrived_at") @db.Date
+  deliveredAt         DateTime? @map("delivered_at") @db.Date
+
+  notes String?
+
+  clientId   String @map("client_id") @db.Uuid
+  supplierId String @map("supplier_id") @db.Uuid
+  categoryId String @map("category_id") @db.Uuid
+
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdById String    @map("created_by_id") @db.Uuid
+  updatedById String?   @map("updated_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  client       Client    @relation(fields: [clientId], references: [id])
+  supplier     Supplier  @relation(fields: [supplierId], references: [id])
+  category     Category  @relation(fields: [categoryId], references: [id])
+  createdBy    User      @relation("GoodCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?     @relation("GoodUpdatedBy", fields: [updatedById], references: [id])
+  overriddenBy User?     @relation("GoodOverriddenBy", fields: [overriddenById], references: [id])
+  checkedInBy  User?     @relation("GoodCheckedInBy", fields: [chinaCheckedInById], references: [id])
+
+  statusHistory GoodsStatusHistory[]
+  snapshots     GoodFinancialSnapshot[]
+  importRows    ImportRow[]
+
+  @@index([trackingNumber])
+  @@index([status])
+  @@index([clientId])
+  @@index([supplierId])
+  @@index([categoryId])
+  @@index([orderedAt])
+  @@index([updatedAt])
+  @@index([archivedAt])
+  @@index([profit])
+  @@index([margin])
+  @@map("goods")
+}
+
+/// Immutable record of every stage a good passes through.
+model GoodsStatusHistory {
+  id           String          @id @default(uuid()) @db.Uuid
+  goodId       String          @map("good_id") @db.Uuid
+  fromStatus   ShipmentStatus? @map("from_status")
+  toStatus     ShipmentStatus  @map("to_status")
+  isCorrection Boolean         @default(false) @map("is_correction")
+  note         String?
+  changedById  String          @map("changed_by_id") @db.Uuid
+  changedAt    DateTime        @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  good      Good @relation(fields: [goodId], references: [id])
+  changedBy User @relation(fields: [changedById], references: [id])
+
+  @@index([goodId, changedAt])
+  @@map("goods_status_history")
+}
+
+/// The financial inputs behind a good's totals at a point in time.
+model GoodFinancialSnapshot {
+  id              String   @id @default(uuid()) @db.Uuid
+  goodId          String   @map("good_id") @db.Uuid
+  quantity        Int
+  unitCost        Decimal  @map("unit_cost") @db.Decimal(14, 4)
+  exchangeRate    Decimal  @map("exchange_rate") @db.Decimal(12, 6)
+  priceMultiplier Decimal  @map("price_multiplier") @db.Decimal(6, 3)
+  suggestedPrice  Decimal  @map("suggested_price") @db.Decimal(14, 2)
+  sellingPrice    Decimal  @map("selling_price") @db.Decimal(14, 2)
+  priceOverridden Boolean  @map("price_overridden")
+  overrideReason  String?  @map("override_reason")
+  createdById     String   @map("created_by_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  good      Good @relation(fields: [goodId], references: [id])
+  createdBy User @relation(fields: [createdById], references: [id])
+
+  @@index([goodId, createdAt])
+  @@map("good_financial_snapshots")
+}
+
+// ───────────────────────── Audit ─────────────────────────
+
+model AuditLog {
+  id        String      @id @default(uuid()) @db.Uuid
+  entity    String
+  entityId  String      @map("entity_id")
+  action    AuditAction
+  before    Json?
+  after     Json?
+  note      String?
+  actorId   String?     @map("actor_id") @db.Uuid
+  requestId String?     @map("request_id")
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entity, entityId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
+
+// ───────────────────────── Imports ─────────────────────────
+
+model ImportBatch {
+  id            String            @id @default(uuid()) @db.Uuid
+  fileName      String            @map("file_name")
+  status        ImportBatchStatus @default(VALIDATING)
+  totalRows     Int               @default(0) @map("total_rows")
+  validRows     Int               @default(0) @map("valid_rows")
+  invalidRows   Int               @default(0) @map("invalid_rows")
+  warningRows   Int               @default(0) @map("warning_rows")
+  committedRows Int               @default(0) @map("committed_rows")
+  skippedRows   Int               @default(0) @map("skipped_rows")
+  /// Upload choices: defaults for empty client/supplier/category/status/rate cells, and the column mapping used
+  options       Json?
+  errorReportPath String?         @map("error_report_path")
+  importedById  String            @map("imported_by_id") @db.Uuid
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  committedAt   DateTime?         @map("committed_at") @db.Timestamptz(6)
+
+  importedBy User        @relation(fields: [importedById], references: [id])
+  rows       ImportRow[]
+
+  @@index([createdAt])
+  @@map("import_batches")
+}
+
+model ImportRow {
+  id        String         @id @default(uuid()) @db.Uuid
+  batchId   String         @map("batch_id") @db.Uuid
+  rowNumber Int            @map("row_number")
+  /// Cell values as read from the file (dates as YYYY-MM-DD)
+  raw       Json
+  state     ImportRowState
+  messages  Json?
+  /// Validated values and price preview, ready to create a good
+  parsed    Json?
+  goodId    String?        @map("good_id") @db.Uuid
+
+  batch ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  good  Good?       @relation(fields: [goodId], references: [id])
+
+  @@unique([batchId, rowNumber])
+  @@map("import_rows")
+}
+
+// ───────────────────────── Settings ─────────────────────────
+
+/// Company-wide defaults (exchange rate, multiplier, currencies).
+model AppSetting {
+  key         String   @id
+  value       Json
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("app_settings")
+}
