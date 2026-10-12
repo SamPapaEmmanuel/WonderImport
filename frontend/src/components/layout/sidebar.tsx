@@ -22,9 +22,9 @@ export function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: bool
             aria-current={active ? 'page' : undefined}
             title={collapsed ? label : undefined}
             className={cn(
-              'flex items-center gap-2.5 rounded-[7px] px-2.5 py-2 font-medium transition-colors',
-              'hover:bg-harbour-2 hover:text-white',
-              active && 'bg-harbour-2 text-white shadow-[inset_3px_0_0_#5CC3CF]',
+              'flex items-center gap-2.5 rounded-[12px] px-3 py-2.5 text-[13.5px] font-medium transition-colors',
+              'text-side-text hover:bg-harbour-2 hover:text-white',
+              active && 'bg-harbour-2 text-white',
               collapsed && 'justify-center px-0',
             )}
           >

@@ -13,7 +13,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <ol className="mt-8 flex items-center gap-0" aria-label="Shipping stages">
             {['Ordered', 'At supplier', 'China warehouse', 'In transit', 'Arrived', 'Delivered'].map((s, i, all) => (
               <li key={s} className="flex flex-1 items-center last:flex-none" title={s}>
-                <span className="size-3 rounded-full border-[3px] border-[#5CC3CF]" />
+                <span className="size-3 rounded-full border-[3px] border-fjord" />
                 {i < all.length - 1 && <span className="h-0.5 flex-1 bg-harbour-2" />}
                 <span className="sr-only">{s}</span>
               </li>

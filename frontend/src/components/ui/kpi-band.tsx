@@ -11,22 +11,22 @@ export interface Kpi {
   href?: string;
 }
 
-/** One bordered band of key figures, divided into cells (not separate cards). */
+/** Separate pill cards like a modern dashboard, instead of one divided band. */
 export function KpiBand({ items, loading }: { items: Kpi[]; loading?: boolean }) {
-  const cols = items.length >= 6 ? 'lg:grid-cols-6' : items.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4';
   return (
-    <section aria-label="Key figures" className={cn('grid grid-cols-2 overflow-hidden rounded-panel border border-line bg-line-soft sm:grid-cols-3', cols)} style={{ gap: 1 }}>
+    <section aria-label="Key figures" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {items.map((k) => {
         const body = (
           <>
             <span className="text-[13px] text-ink-2">{k.label}</span>
-            {loading ? <Skeleton className="my-1 h-6 w-24" /> : <span className="text-lg font-semibold tracking-[-0.01em] sm:text-[22px]">{k.value}</span>}
+            {loading ? <Skeleton className="my-1 h-6 w-24" /> : <span className="text-lg font-semibold tracking-[-0.02em] sm:text-[22px]">{k.value}</span>}
             {k.hint && <span className="text-xs text-ink-3">{k.hint}</span>}
           </>
         );
-        const cls = 'flex min-w-0 flex-col gap-1 bg-surface px-[18px] py-4';
+        const cls =
+          'flex min-w-0 flex-col gap-1 rounded-panel border border-line bg-surface px-[18px] py-4 shadow-[0_1px_2px_rgba(16,16,28,0.04)] transition-colors';
         return k.href && !loading ? (
-          <Link key={k.label} href={k.href} className={cn(cls, 'hover:bg-mist')}>
+          <Link key={k.label} href={k.href} className={cn(cls, 'hover:border-tide/50')}>
             {body}
           </Link>
         ) : (

@@ -2,91 +2,98 @@
 
 /*
  * WonderImport visual system — see docs/PHASE-0-DECISIONS.md §7.
- * Semantic tokens live on :root so light and dark themes share one set of utilities.
+ * Modern neutral + violet theme. Semantic tokens live on :root so light and
+ * dark themes share one set of utilities. Historic names (harbour/fjord/tide)
+ * are kept as aliases so existing classes keep working.
  */
 :root {
-  --harbour: #12283a;
-  --harbour-2: #1b3a52;
-  --fjord: #17697a;
-  --fjord-strong: #0f5562;
-  --tide: #247096;
-  --glacier: #e6f0f3;
-  --mist: #f3f6f8;
+  /* Sidebar + dark surfaces */
+  --harbour: #111116;
+  --harbour-2: #1e1e26;
+  /* Primary accent (violet) */
+  --fjord: #5f3df6;
+  --fjord-strong: #4c2fe0;
+  --tide: #6d5df6;
+  /* Tinted fills + canvas */
+  --glacier: #eceafb;
+  --mist: #f4f4f7;
   --surface: #ffffff;
-  --line: #dce4ea;
-  --line-soft: #ebf0f3;
-  --ink: #12283a;
-  --ink-2: #4a5f70;
-  --ink-3: #5d6a75;
-  --mint: #20765f;
-  --mint-bg: #e5f4ef;
-  --rose: #b4405c;
-  --rose-bg: #f9e8ec;
-  --amber: #8f5e18;
-  --amber-bg: #fbf3e4;
-  --side-text: #b9c9d6;
-  /* Text on fjord/rose fills (primary and danger buttons) */
+  --line: #e7e7ee;
+  --line-soft: #f0f0f5;
+  /* Ink scale */
+  --ink: #14141a;
+  --ink-2: #5b5b66;
+  --ink-3: #8b8b96;
+  /* Status */
+  --mint: #1e8a5f;
+  --mint-bg: #e3f5ec;
+  --rose: #c93a5e;
+  --rose-bg: #fae7ec;
+  --amber: #9a6414;
+  --amber-bg: #faf0da;
+  --side-text: #a7a7b3;
+  /* Text on violet/rose fills (primary and danger buttons) */
   --on-accent: #ffffff;
 
-  --st-ordered: #8a9aab;
-  --st-supplier: #6c7fd8;
-  --st-china: #8b6fc9;
-  --st-transit: #2e8fc0;
-  --st-arrived: #1f9e9a;
-  --st-delivered: #2a9d7f;
+  --st-ordered: #8a8fa3;
+  --st-supplier: #5f6df0;
+  --st-china: #8b5cf6;
+  --st-transit: #4f8ff7;
+  --st-arrived: #14a5a5;
+  --st-delivered: #1e9e6a;
 
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --harbour: #0a151e;
-    --harbour-2: #14283a;
-    --fjord: #3fa7b5;
-    --fjord-strong: #5cbac6;
-    --glacier: #18303d;
-    --mist: #0e1a24;
-    --surface: #14232f;
-    --line: #243746;
-    --line-soft: #1c2d3a;
-    --ink: #e4edf3;
-    --ink-2: #a9bbc8;
-    --ink-3: #859aaa;
-    --tide: #4da0c9;
-    --mint: #41a88d;
-    --rose: #d57f93;
-    --amber: #c38e43;
-    --on-accent: #0a151e;
-    --mint-bg: #15342d;
-    --rose-bg: #3a1c25;
-    --amber-bg: #2e2516;
-    --side-text: #a3b6c4;
+    --harbour: #0b0b0e;
+    --harbour-2: #1a1a21;
+    --fjord: #7d6cf8;
+    --fjord-strong: #9a8ffb;
+    --glacier: #23232e;
+    --mist: #101014;
+    --surface: #17171d;
+    --line: #27272f;
+    --line-soft: #1e1e25;
+    --ink: #f2f2f5;
+    --ink-2: #b6b6c0;
+    --ink-3: #8a8a95;
+    --tide: #8f81fa;
+    --mint: #3ecf8e;
+    --rose: #f06a8a;
+    --amber: #d9a13b;
+    --on-accent: #ffffff;
+    --mint-bg: #123327;
+    --rose-bg: #3a1a24;
+    --amber-bg: #2e2412;
+    --side-text: #a3a3ae;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --harbour: #0a151e;
-  --harbour-2: #14283a;
-  --fjord: #3fa7b5;
-  --fjord-strong: #5cbac6;
-  --glacier: #18303d;
-  --mist: #0e1a24;
-  --surface: #14232f;
-  --line: #243746;
-  --line-soft: #1c2d3a;
-  --ink: #e4edf3;
-  --ink-2: #a9bbc8;
-  --ink-3: #859aaa;
-  --tide: #4da0c9;
-  --mint: #41a88d;
-  --rose: #d57f93;
-  --amber: #c38e43;
-  --on-accent: #0a151e;
-  --mint-bg: #15342d;
-  --rose-bg: #3a1c25;
-  --amber-bg: #2e2516;
-  --side-text: #a3b6c4;
+  --harbour: #0b0b0e;
+  --harbour-2: #1a1a21;
+  --fjord: #7d6cf8;
+  --fjord-strong: #9a8ffb;
+  --glacier: #23232e;
+  --mist: #101014;
+  --surface: #17171d;
+  --line: #27272f;
+  --line-soft: #1e1e25;
+  --ink: #f2f2f5;
+  --ink-2: #b6b6c0;
+  --ink-3: #8a8a95;
+  --tide: #8f81fa;
+  --mint: #3ecf8e;
+  --rose: #f06a8a;
+  --amber: #d9a13b;
+  --on-accent: #ffffff;
+  --mint-bg: #123327;
+  --rose-bg: #3a1a24;
+  --amber-bg: #2e2412;
+  --side-text: #a3a3ae;
   color-scheme: dark;
 }
 
@@ -113,11 +120,11 @@
   --color-side-text: var(--side-text);
   --color-on-accent: var(--on-accent);
 
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jet-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
 
-  --radius-panel: 12px;
-  --radius-control: 8px;
+  --radius-panel: 18px;
+  --radius-control: 12px;
 }
 
 @layer base {
@@ -130,9 +137,11 @@
     color: var(--ink);
     font-family: var(--font-sans);
     font-size: 14px;
-    line-height: 1.45;
+    line-height: 1.5;
+    letter-spacing: -0.006em;
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   :focus-visible {
     outline: 2px solid var(--tide);
