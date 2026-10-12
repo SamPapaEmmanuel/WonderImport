@@ -131,13 +131,10 @@ async function main() {
 
   const supabaseUserId = await ensureSupabaseLogin(adminEmail, adminPassword, adminName);
 
-  // NOTE: `supabaseId` must match the field on your User model that links to Supabase Auth.
-  // Rename it (authId, authUserId, ...) if your schema uses a different name, or remove it
-  // from both lines if you link users by email on first sign-in.
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
-    create: { email: adminEmail, name: adminName, role: Role.ADMIN, supabaseId: supabaseUserId },
-    update: { role: Role.ADMIN, active: true, supabaseId: supabaseUserId },
+    create: { email: adminEmail, name: adminName, role: Role.ADMIN, authId: supabaseUserId },
+    update: { role: Role.ADMIN, active: true, authId: supabaseUserId },
   });
   console.log(`Administrator: ${admin.email}`);
 

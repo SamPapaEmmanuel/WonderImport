@@ -17,7 +17,7 @@ import { duplicateKey, validateRows, type ImportContext, type ImportDefaults, ty
 import { buildErrorReport, buildTemplateCsv, buildTemplateXlsx } from './import-workbooks';
 
 /** What is stored on the batch so a commit re-validates with exactly the choices made at upload. */
-interface StoredOptions {
+export interface StoredOptions {
   defaults: ImportDefaults;
   sheetName: string | null;
   headerRow: number;
