@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Menu, Search } from 'lucide-react';
 import { usePricingSettings } from '@/features/settings/use-pricing-settings';
 import { useUiStore } from '@/stores/ui-store';
+import { ThemeToggle } from './theme-toggle';
 import { UserMenu } from './user-menu';
 
 export function Topbar() {
@@ -62,6 +63,7 @@ export function Topbar() {
       <div className={pricing ? '' : 'ml-auto'}>
         <UserMenu />
       </div>
+      <ThemeToggle />
     </header>
   );
 }

@@ -3,6 +3,7 @@ import { WorkspaceStatusPanel } from '@/features/dashboard/workspace-status-pane
 import { MasterDataPanel } from '@/features/master-data/master-data-panel';
 import { AccountPanel } from './account-panel';
 import { AdminOnly } from './admin-only';
+import { AppearancePanel } from './appearance-panel';
 import { PeoplePanel } from '@/features/users/people-panel';
 import { PricingDefaultsPanel } from './pricing-defaults-panel';
 
@@ -19,6 +20,7 @@ export function SettingsScreen() {
           </AdminOnly>
         </div>
         <div className="flex min-w-0 flex-col gap-5">
+          <AppearancePanel />
           <AccountPanel />
           <WorkspaceStatusPanel />
         </div>
