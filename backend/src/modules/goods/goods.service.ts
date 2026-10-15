@@ -14,7 +14,7 @@ import type { ArchiveGoodDto, ChangeStatusDto, ChinaCheckInDto, CreateGoodDto, U
 import type { GoodsFilterQuery } from './dto/list-goods.query';
 import { planFinancials, type FinancialPlan } from './goods-financials';
 import { goodsOrderBy, goodsWhere } from './goods-query';
-import { auditableGood, goodDetailInclude, goodInclude, toGoodDetailView, toGoodView, type GoodRow } from './goods.view';
+import { auditableGood, goodDetailInclude, goodInclude, goodListInclude, toGoodDetailView, toGoodView, type GoodRow } from './goods.view';
 
 type Tx = Prisma.TransactionClient;
 
@@ -36,7 +36,8 @@ export class GoodsService {
     const where = goodsWhere(q);
     const [total, rows] = await Promise.all([
       this.prisma.good.count({ where }),
-      this.prisma.good.findMany({ where, orderBy: goodsOrderBy(q.sort), include: goodInclude, ...skipTake(q) }),
+      // Slim include: drops 3 user joins per row vs goodInclude (detail drawer fetches full).
+      this.prisma.good.findMany({ where, orderBy: goodsOrderBy(q.sort), include: goodListInclude, ...skipTake(q) }),
     ]);
     const { page: _p, pageSize: _s, sort, ...filters } = q;
     return paginate(rows.map(toGoodView), total, q, filters, sort);

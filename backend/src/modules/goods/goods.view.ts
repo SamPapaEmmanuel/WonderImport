@@ -13,6 +13,18 @@ export const goodInclude = {
   updatedBy: person,
 } satisfies Prisma.GoodInclude;
 
+/**
+ * Slim include for list/table views: only what GoodsTable and
+ * CompactGoodsTable render (names + check-in tooltip name). Drops 3 user
+ * joins per row vs goodInclude; detail drawer fetches the full shape.
+ */
+export const goodListInclude = {
+  client: { select: { id: true, code: true, name: true, isStock: true } },
+  supplier: { select: { id: true, name: true } },
+  category: { select: { id: true, name: true } },
+  checkedInBy: person,
+} satisfies Prisma.GoodInclude;
+
 export const goodDetailInclude = {
   ...goodInclude,
   statusHistory: { orderBy: { changedAt: 'asc' }, include: { changedBy: person } },
@@ -21,12 +33,17 @@ export const goodDetailInclude = {
 
 export type GoodRow = Prisma.GoodGetPayload<{ include: typeof goodInclude }>;
 export type GoodDetailRow = Prisma.GoodGetPayload<{ include: typeof goodDetailInclude }>;
+export type GoodListRow = Prisma.GoodGetPayload<{ include: typeof goodListInclude }>;
 
 const money = (d: Prisma.Decimal) => d.toFixed(2);
 const iso = (d: Date | null) => d?.toISOString() ?? null;
 
 /** API shape for a good. Decimals are strings; dates are YYYY-MM-DD (stage dates) or ISO timestamps. */
-export function toGoodView(g: GoodRow) {
+export function toGoodView(g: GoodRow | GoodListRow) {
+  // List rows skip 3 user joins; the wire shape stays identical (nulls).
+  const overriddenBy = 'overriddenBy' in g ? g.overriddenBy : null;
+  const createdBy = 'createdBy' in g ? g.createdBy : null;
+  const updatedBy = 'updatedBy' in g ? g.updatedBy : null;
   return {
     id: g.id,
     itemName: g.itemName,
@@ -42,7 +59,7 @@ export function toGoodView(g: GoodRow) {
     priceOverridden: g.priceOverridden,
     overrideReason: g.overrideReason,
     overriddenAt: iso(g.overriddenAt),
-    overriddenBy: g.overriddenBy,
+    overriddenBy,
     retailPrice: g.retailPrice ? money(g.retailPrice) : null,
     totalCost: money(g.totalCost),
     expectedRevenue: money(g.expectedRevenue),
@@ -66,9 +83,9 @@ export function toGoodView(g: GoodRow) {
     category: g.category,
     archivedAt: iso(g.archivedAt),
     createdAt: g.createdAt.toISOString(),
-    createdBy: g.createdBy,
+    createdBy,
     updatedAt: g.updatedAt.toISOString(),
-    updatedBy: g.updatedBy,
+    updatedBy,
   };
 }
 

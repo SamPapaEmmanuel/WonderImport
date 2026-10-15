@@ -9,7 +9,7 @@ type RetryableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
 
 /**
  * The one HTTP client for the NestJS API.
- * - attaches the current Supabase access token
+ * - attaches the current Supabase access token (cached in memory, refreshed on expiry/401)
  * - on 401, refreshes the session once and retries
  * - rejects with ApiError so screens can show code-specific messages
  */
@@ -19,9 +19,39 @@ export const api = axios.create({
   headers: { Accept: 'application/json' },
 });
 
+// In-memory token: avoids an async storage read on every request.
+let cachedToken: string | null = null;
+let cachedExpiry = 0; // epoch seconds; refresh 60s early
+let sessionPromise: Promise<string | null> | null = null;
+
+function getCachedToken(): string | null {
+  if (cachedToken && Date.now() / 1000 < cachedExpiry - 60) return cachedToken;
+  return null;
+}
+
+function rememberToken(token: string | null, expiresAt?: number) {
+  cachedToken = token;
+  cachedExpiry = expiresAt ?? (token ? Date.now() / 1000 + 3600 : 0);
+}
+
+/** Single-flight session read shared by concurrent requests. */
+function readSessionToken(): Promise<string | null> {
+  sessionPromise ??= supabaseBrowser()
+    .auth.getSession()
+    .then(({ data }) => {
+      const s = data.session;
+      rememberToken(s?.access_token ?? null, s?.expires_at);
+      return s?.access_token ?? null;
+    })
+    .finally(() => {
+      sessionPromise = null;
+    });
+  return sessionPromise;
+}
+
 api.interceptors.request.use(async (config) => {
-  const { data } = await supabaseBrowser().auth.getSession();
-  const token = data.session?.access_token;
+  let token = getCachedToken();
+  if (!token) token = await readSessionToken();
   if (token) config.headers.set('Authorization', `Bearer ${token}`);
   return config;
 });
@@ -31,7 +61,10 @@ let refreshing: Promise<string | null> | null = null;
 async function refreshToken(): Promise<string | null> {
   refreshing ??= supabaseBrowser()
     .auth.refreshSession()
-    .then(({ data }) => data.session?.access_token ?? null)
+    .then(({ data }) => {
+      rememberToken(data.session?.access_token ?? null, data.session?.expires_at);
+      return data.session?.access_token ?? null;
+    })
     .finally(() => {
       refreshing = null;
     });

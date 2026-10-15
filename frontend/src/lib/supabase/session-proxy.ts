@@ -5,8 +5,10 @@ import { publicEnv } from '../env';
 const PUBLIC_PATHS = ['/login', '/auth/confirm', '/auth/set-password'];
 
 /**
- * Refreshes the Supabase session cookie on every request and protects app routes.
- * The API still verifies every token; this only decides which screen to show.
+ * Refreshes the Supabase session cookie and protects app routes.
+ * Uses getSession() (cookie read, no network) for speed — the API still
+ * verifies every token with JWKS, so an expired token fails safely there
+ * and SessionGate redirects to /login.
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -22,27 +24,35 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // getUser() validates the token with Supabase rather than trusting the cookie.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
 
-  if (!user && !isPublic) {
+  // Public pages never need a session check.
+  if (isPublic) {
+    // Still allow /login to bounce signed-in users without a network call.
+    if (path === '/login') {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/dashboard';
+        url.search = '';
+        return NextResponse.redirect(url);
+      }
+    }
+    return response;
+  }
+
+  // Fast path: no auth cookies at all → definitely signed out.
+  const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'));
+  if (!hasAuthCookie) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.search = path === '/' ? '' : `?next=${encodeURIComponent(path + request.nextUrl.search)}`;
     return NextResponse.redirect(url);
   }
 
-  if (user && path === '/login') {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    url.search = '';
-    return NextResponse.redirect(url);
-  }
-
+  // Cookie exists: trust it here (no network). The API + SessionGate verify.
   return response;
 }

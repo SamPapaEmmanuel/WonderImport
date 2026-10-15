@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
+import { PasswordInput } from '@/components/ui/password-input';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
 /** Only allow redirects to paths inside this app. */
@@ -50,7 +51,7 @@ export function LoginForm({ next, expired }: { next?: string; expired?: boolean 
         <Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
       </Field>
       <Field label="Password">
-        <Input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
       </Field>
       <Button type="submit" variant="primary" loading={submitting} className="mt-1 w-full">
         Sign in

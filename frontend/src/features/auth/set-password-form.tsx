@@ -4,8 +4,8 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
+import { PasswordInput } from '@/components/ui/password-input';
 import { supabaseBrowser } from '@/lib/supabase/client';
 
 const MIN_LENGTH = 10;
@@ -46,10 +46,10 @@ export function SetPasswordForm() {
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
       {formError && <Notice tone="error" title={formError} />}
       <Field label="New password" error={errors.password} hint={`At least ${MIN_LENGTH} characters.`}>
-        <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
+        <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
       </Field>
       <Field label="Confirm password" error={errors.confirm}>
-        <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        <PasswordInput autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
       </Field>
       <Button type="submit" variant="primary" loading={submitting} className="mt-1 w-full">
         Save password and continue

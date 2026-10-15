@@ -7,7 +7,6 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
 import { Select } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { ApiError } from '@/lib/api-error';
 import { cn } from '@/lib/cn';
 import { ghs } from '@/lib/format';
@@ -96,7 +95,6 @@ function validate(s: FormState, mode: GoodFormMode): Errors {
   const e: Errors = {};
   if (!s.itemName.trim()) e.itemName = 'Enter the item name.';
   if (!s.clientId) e.clientId = 'Choose a client, or Stock if it is for resale.';
-  if (!s.supplierId) e.supplierId = 'Choose a supplier.';
   if (!s.categoryId) e.categoryId = 'Choose a category.';
   const q = Number(s.quantity);
   if (!/^\d+$/.test(s.quantity) || q < 1) e.quantity = 'Enter a whole number of at least 1.';
@@ -112,13 +110,16 @@ function validate(s: FormState, mode: GoodFormMode): Errors {
   return e;
 }
 
-function toPayload(s: FormState, mode: GoodFormMode): GoodInput {
+function toPayload(s: FormState, mode: GoodFormMode, fallbackSupplierId?: string): GoodInput {
   const nullable = (v: string) => (v.trim() ? v.trim() : null);
+  // Supplier is hidden from the form: keep the existing one on edit, or the
+  // default active supplier on create, so the required API field still sends.
+  const supplierId = s.supplierId || fallbackSupplierId || '';
   const full: GoodInput = {
     itemName: s.itemName.trim(),
     trackingNumber: nullable(s.trackingNumber),
     clientId: s.clientId,
-    supplierId: s.supplierId,
+    supplierId,
     categoryId: s.categoryId,
     quantity: Number(s.quantity),
     quantitySold: Number(s.quantitySold),
@@ -207,7 +208,13 @@ export function GoodFormDrawer({ state, onClose, onSaved }: Props) {
     setErrors(v);
     if (Object.keys(v).length) return;
 
-    const payload = toPayload(form, state!);
+    // Hidden supplier: fall back to the first active supplier so create still sends a valid id.
+    const fallbackSupplierId = !isEdit && !form.supplierId ? (lookups?.suppliers[0]?.id ?? '') : undefined;
+    const payload = toPayload(form, state!, fallbackSupplierId);
+    if (!isEdit && !payload.supplierId) {
+      setErrors({ form: 'No active supplier exists yet. Add one under Master data first.' });
+      return;
+    }
     if (isEdit && Object.keys(payload).length === 0) {
       onClose();
       return;
@@ -250,29 +257,19 @@ export function GoodFormDrawer({ state, onClose, onSaved }: Props) {
         {errors.form && <Notice tone="error" title="Not saved">{errors.form}</Notice>}
 
         <Section title="Item">
-          <Field label="Item name" error={errors.itemName}>
-            <Input value={form.itemName} onChange={(e) => set('itemName', e.target.value)} maxLength={200} autoFocus={!isEdit} />
-          </Field>
           <Field label="Tracking number" error={errors.trackingNumber} hint="The delivery ID on the parcel. Several items can share one.">
-            <Input value={form.trackingNumber} onChange={(e) => set('trackingNumber', e.target.value)} className="font-mono" maxLength={64} />
+            <Input value={form.trackingNumber} onChange={(e) => set('trackingNumber', e.target.value)} className="font-mono" maxLength={64} autoFocus={!isEdit} />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Item name" error={errors.itemName}>
+            <Input value={form.itemName} onChange={(e) => set('itemName', e.target.value)} maxLength={200} />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Client" error={errors.clientId}>
               <Select value={form.clientId} onChange={(e) => set('clientId', e.target.value)}>
                 <option value="">Choose…</option>
                 {lookups?.clients.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Supplier" error={errors.supplierId}>
-              <Select value={form.supplierId} onChange={(e) => set('supplierId', e.target.value)}>
-                <option value="">Choose…</option>
-                {lookups?.suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
                   </option>
                 ))}
               </Select>
@@ -392,12 +389,6 @@ export function GoodFormDrawer({ state, onClose, onSaved }: Props) {
             </label>
           )}
           {isEdit && <p className="text-[12.5px] text-ink-3">Change the status and China check-in from the goods list or the details panel, so each move is recorded in the timeline.</p>}
-        </Section>
-
-        <Section title="Notes">
-          <Field label="Notes" error={errors.notes}>
-            <Textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} maxLength={2000} />
-          </Field>
         </Section>
       </form>
     </Dialog>

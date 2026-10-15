@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ShipmentStatus } from '../../generated/prisma/enums';
 import { PrismaService } from '../../prisma/prisma.service';
 import { goodsWhere } from '../goods/goods-query';
-import { goodInclude, toGoodView } from '../goods/goods.view';
+import { goodListInclude, toGoodView } from '../goods/goods.view';
 import { buildDashboardSummary } from './dashboard-summary';
 import type { DashboardQuery } from './dashboard.dto';
 import { resolvePeriod } from './period';
@@ -31,13 +31,17 @@ export class DashboardService {
         where: { AND: [where, { chinaCheckedIn: false, status: { in: AT_OR_PAST_WAREHOUSE } }] },
         _count: { _all: true },
       }),
-      this.prisma.good.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: RECENT, include: goodInclude }),
+      this.prisma.good.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: RECENT, include: goodListInclude }),
     ]);
 
-    const clients = await this.prisma.client.findMany({
-      where: { id: { in: byClient.map((g) => g.clientId) } },
-      select: { id: true, code: true, name: true, isStock: true },
-    });
+    // Client names for the leading-clients panel, in the same round as the groups.
+    const clientIds = [...new Set(byClient.map((g) => g.clientId).filter((id): id is string => id != null))];
+    const clients = clientIds.length
+      ? await this.prisma.client.findMany({
+          where: { id: { in: clientIds } },
+          select: { id: true, code: true, name: true, isStock: true },
+        })
+      : [];
 
     return {
       ...buildDashboardSummary({ period, byStatus, byClient, missingByStatus, clients }),
