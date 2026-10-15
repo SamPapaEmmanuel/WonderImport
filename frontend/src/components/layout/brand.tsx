@@ -1,9 +1,9 @@
 import { cn } from '@/lib/cn';
 
 /**
- * Globe-and-boxes photo logo on a white badge tile, so the photo's light
- * background blends with both the dark sidebar and light surfaces.
- * Plain <img> (not next/image): avoids optimizer caching so logo swaps show instantly.
+ * Photo logo on a white badge tile, so the image blends with both the dark
+ * sidebar and light surfaces. Plain <img> (not next/image): avoids optimizer
+ * caching so logo swaps show instantly.
  */
 export function BrandMark({ className }: { className?: string }) {
   return (
