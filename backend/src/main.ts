@@ -12,8 +12,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   configureApp(app);
   app.enableShutdownHooks();
-  await app.listen(config.PORT);
-  Logger.log(`API listening on http://localhost:${config.PORT}/api`, 'Bootstrap');
+  await app.listen(config.PORT, '0.0.0.0');
+  Logger.log(`API listening on port ${config.PORT}`, 'Bootstrap');
 }
 
 bootstrap();

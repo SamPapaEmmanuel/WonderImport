@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: wonderimport-api
+    runtime: node
+    rootDir: backend
+    plan: starter # or 'free' (free tier instances spin down after inactivity)
+    region: frankfurt # or oregon, ohio, singapore
+    buildCommand: npm ci && npm run build
+    # Apply committed migrations before every deploy (uses DIRECT_URL).
+    preDeployCommand: npx prisma migrate deploy
+    startCommand: node dist/main.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "300"
+      - key: DB_POOL_MAX
+        value: "10"
+      - key: DATABASE_URL
+        sync: false # Set in Render Dashboard: Supabase Transaction Pooler URL (port 6543)
+      - key: DIRECT_URL
+        sync: false # Set in Render Dashboard: Supabase Direct/Session URL (port 5432)
+      - key: SUPABASE_URL
+        sync: false # Set in Render Dashboard: https://<project-ref>.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false # Set in Render Dashboard: Supabase Service Role Secret Key
+      - key: WEB_ORIGIN
+        sync: false # Set in Render Dashboard: e.g. https://your-frontend.vercel.app
+  - type: web
+    name: wonderimport-web
+    runtime: node
+    rootDir: frontend
+    plan: starter # or 'free' (free tier instances spin down after inactivity)
+    region: frankfurt # keep next to the API
+    buildCommand: npm ci && npm run build
+    startCommand: npm start -- --port $PORT
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        sync: false # Set in Render Dashboard: e.g. https://wonderimport-api.onrender.com/api
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false # Set in Render Dashboard: https://<project-ref>.supabase.co
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        sync: false # Set in Render Dashboard: Supabase publishable/anon key (public, baked at build)
+
