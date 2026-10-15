@@ -43,6 +43,10 @@ function readSessionToken(): Promise<string | null> {
       rememberToken(s?.access_token ?? null, s?.expires_at);
       return s?.access_token ?? null;
     })
+    .catch(() => {
+      rememberToken(null, 0);
+      return null;
+    })
     .finally(() => {
       sessionPromise = null;
     });
@@ -64,6 +68,10 @@ async function refreshToken(): Promise<string | null> {
     .then(({ data }) => {
       rememberToken(data.session?.access_token ?? null, data.session?.expires_at);
       return data.session?.access_token ?? null;
+    })
+    .catch(() => {
+      rememberToken(null, 0);
+      return null;
     })
     .finally(() => {
       refreshing = null;
@@ -97,7 +105,11 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 401 && code === 'UNAUTHENTICATED' && typeof window !== 'undefined') {
-      await supabaseBrowser().auth.signOut();
+      try {
+        await supabaseBrowser().auth.signOut();
+      } catch {
+        // Ignore errors if the session was already purged or revoked
+      }
       const next = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.assign(`/login?expired=1&next=${next}`);
     }

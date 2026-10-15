@@ -82,61 +82,95 @@ const STAGE_OFFSET_DAYS = [0, 4, 10, 14, 38, 42];
  * If the email is already registered, resets that account's password instead.
  * Returns the Supabase user id.
  */
-async function ensureSupabaseLogin(email: string, password: string, name: string): Promise<string> {
+async function ensureSupabaseLogin(email: string, password: string, name: string): Promise<{ id: string; email: string }> {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to create the administrator login');
-  }
-  const supabase = createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  if (url && key) {
+    const supabase = createClient(url, key, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
-  const { data, error } = await supabase.auth.admin.createUser({
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { name },
+    });
+    if (!error && data.user) {
+      console.log(`Supabase login created for ${email}`);
+      return { id: data.user.id, email };
+    }
+
+    // Already registered: find the account and reset its password.
+    let existingId: string | undefined;
+    for (let page = 1; !existingId; page++) {
+      const { data: list, error: listError } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
+      if (listError) throw listError;
+      existingId = list.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())?.id;
+      if (list.users.length < 200) break;
+    }
+    if (existingId) {
+      const { error: updateError } = await supabase.auth.admin.updateUserById(existingId, {
+        password,
+        email_confirm: true,
+      });
+      if (updateError) throw updateError;
+      console.log(`Supabase login already existed for ${email}; password reset`);
+      return { id: existingId, email };
+    }
+  }
+
+  // Fallback: Check auth.users directly in the database
+  const directUsers = await prisma.$queryRawUnsafe<Array<{ id: string; email: string }>>(
+    `SELECT id, email FROM auth.users WHERE lower(email) = lower($1) LIMIT 1`,
     email,
-    password,
-    email_confirm: true,
-    user_metadata: { name },
-  });
-  if (!error && data.user) {
-    console.log(`Supabase login created for ${email}`);
-    return data.user.id;
+  );
+  if (directUsers.length > 0 && directUsers[0]?.id) {
+    console.log(`Found registered Supabase user in auth.users: ${directUsers[0].email} (${directUsers[0].id})`);
+    return { id: directUsers[0].id, email: directUsers[0].email };
   }
 
-  // Already registered: find the account and reset its password.
-  let existingId: string | undefined;
-  for (let page = 1; !existingId; page++) {
-    const { data: list, error: listError } = await supabase.auth.admin.listUsers({ page, perPage: 200 });
-    if (listError) throw listError;
-    existingId = list.users.find((u) => u.email?.toLowerCase() === email)?.id;
-    if (list.users.length < 200) break;
+  // Check if any registered user exists in auth.users
+  const anyUser = await prisma.$queryRawUnsafe<Array<{ id: string; email: string }>>(
+    `SELECT id, email FROM auth.users ORDER BY created_at ASC LIMIT 1`,
+  );
+  if (anyUser.length > 0 && anyUser[0]?.id) {
+    console.log(`Using existing Supabase Auth user: ${anyUser[0].email} (${anyUser[0].id})`);
+    return { id: anyUser[0].id, email: anyUser[0].email };
   }
-  if (!existingId) throw error ?? new Error(`Could not create or find a Supabase user for ${email}`);
 
-  const { error: updateError } = await supabase.auth.admin.updateUserById(existingId, {
-    password,
-    email_confirm: true,
-  });
-  if (updateError) throw updateError;
-  console.log(`Supabase login already existed for ${email}; password reset`);
-  return existingId;
+  throw new Error(
+    `No user found in Supabase Auth. Set SUPABASE_SERVICE_ROLE_KEY or sign up at http://localhost:3000/login first.`,
+  );
 }
 
 async function main() {
   const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? '').trim().toLowerCase();
-  if (!adminEmail) throw new Error('Set SEED_ADMIN_EMAIL to the first administrator’s email');
   const adminName = process.env.SEED_ADMIN_NAME ?? 'Administrator';
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? '';
-  if (adminPassword.length < 8) throw new Error('Set SEED_ADMIN_PASSWORD (at least 8 characters)');
 
-  const supabaseUserId = await ensureSupabaseLogin(adminEmail, adminPassword, adminName);
+  const { id: supabaseUserId, email: resolvedAdminEmail } = await ensureSupabaseLogin(
+    adminEmail || 'admin@example.com',
+    adminPassword,
+    adminName,
+  );
 
   const admin = await prisma.user.upsert({
-    where: { email: adminEmail },
-    create: { email: adminEmail, name: adminName, role: Role.ADMIN, authId: supabaseUserId },
+    where: { email: resolvedAdminEmail },
+    create: { email: resolvedAdminEmail, name: adminName, role: Role.ADMIN, authId: supabaseUserId },
     update: { role: Role.ADMIN, active: true, authId: supabaseUserId },
   });
   console.log(`Administrator: ${admin.email}`);
+
+  // Also provision the configured SEED_ADMIN_EMAIL if it differs from the Supabase account
+  if (adminEmail && adminEmail !== resolvedAdminEmail.toLowerCase()) {
+    await prisma.user.upsert({
+      where: { email: adminEmail },
+      create: { email: adminEmail, name: adminName, role: Role.ADMIN },
+      update: { role: Role.ADMIN, active: true },
+    });
+    console.log(`Additional Administrator provisioned: ${adminEmail}`);
+  }
 
   await prisma.appSetting.upsert({
     where: { key: PRICING_KEY },

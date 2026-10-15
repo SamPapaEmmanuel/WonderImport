@@ -31,14 +31,42 @@ export async function updateSession(request: NextRequest) {
   if (isPublic) {
     // Still allow /login to bounce signed-in users without a network call.
     if (path === '/login') {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/dashboard';
-        url.search = '';
-        return NextResponse.redirect(url);
+      // If arriving with expired=1, don't attempt to get/refresh the session;
+      // purge the stale auth cookie so the browser stops sending dead tokens.
+      if (request.nextUrl.searchParams.get('expired') === '1') {
+        request.cookies.getAll().forEach((c) => {
+          if (c.name.startsWith('sb-') && c.name.endsWith('-auth-token')) {
+            response.cookies.delete(c.name);
+          }
+        });
+        return response;
+      }
+
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+        if (!error && session) {
+          const url = request.nextUrl.clone();
+          url.pathname = '/dashboard';
+          url.search = '';
+          return NextResponse.redirect(url);
+        }
+        if (error) {
+          request.cookies.getAll().forEach((c) => {
+            if (c.name.startsWith('sb-') && c.name.endsWith('-auth-token')) {
+              response.cookies.delete(c.name);
+            }
+          });
+        }
+      } catch {
+        // Stale or revoked token: clear auth cookies so the page renders cleanly.
+        request.cookies.getAll().forEach((c) => {
+          if (c.name.startsWith('sb-') && c.name.endsWith('-auth-token')) {
+            response.cookies.delete(c.name);
+          }
+        });
       }
     }
     return response;
