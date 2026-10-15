@@ -3,11 +3,9 @@ services:
     name: wonderimport-api
     runtime: node
     rootDir: backend
-    plan: starter # or 'free' (free tier instances spin down after inactivity)
+    plan: free
     region: frankfurt # or oregon, ohio, singapore
-    buildCommand: npm ci && npm run build
-    # Apply committed migrations before every deploy (uses DIRECT_URL).
-    preDeployCommand: npx prisma migrate deploy
+    buildCommand: npm ci && npm run build && npx prisma migrate deploy
     startCommand: node dist/main.js
     healthCheckPath: /api/health
     autoDeploy: true
@@ -34,7 +32,7 @@ services:
     name: wonderimport-web
     runtime: node
     rootDir: frontend
-    plan: starter # or 'free' (free tier instances spin down after inactivity)
+    plan: free # free tier
     region: frankfurt # keep next to the API
     buildCommand: npm ci && npm run build
     startCommand: npm start -- --port $PORT
