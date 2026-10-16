@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { ShipmentStatus } from '../../../generated/prisma/enums';
 import { IsDateOnly, IsDecimalString, TrimToNull } from '../../../common/validation/decorators';
 
@@ -81,6 +81,43 @@ export class CreateGoodDto extends GoodFields {
   @IsOptional()
   @IsBoolean()
   chinaCheckedIn?: boolean;
+
+  /**
+   * One-step multi-buyer creation: shares of this lot sold at recording time
+   * (e.g. Anita 5, Cons 3, Grace 2 of 10). The lot stays under `clientId`
+   * (use the Stock client when splitting); each entry becomes a GoodAllocation
+   * in the same transaction. Omit for the classic single-client good.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => CreateAllocationDto)
+  allocations?: CreateAllocationDto[];
+}
+
+/** One buyer's share when creating a good with 2+ clients. */
+export class CreateAllocationDto {
+  @IsUUID('all', { message: 'Choose a client' })
+  clientId: string;
+
+  @Type(() => Number)
+  @IsInt({ message: 'quantity must be a whole number' })
+  @Min(1)
+  @Max(1_000_000)
+  quantity: number;
+
+  /** GHS per unit for this buyer. Omit to inherit the lot's selling price. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsDecimalString({ intDigits: 12, fracDigits: 2 })
+  sellingPrice?: string | null;
+
+  @IsOptional()
+  @TrimToNull()
+  @MaxLength(500)
+  note?: string | null;
 }
 
 export class UpdateGoodDto extends GoodFields {
@@ -172,9 +209,34 @@ export class ChinaCheckInDto {
   note?: string | null;
 }
 
+export class AllocateGoodDto {
+  /** The buyer receiving these units. Archived clients are rejected. */
+  @IsUUID('all', { message: 'Choose a client' })
+  clientId: string;
+
+  /** Whole units to sell to this client. Must fit in itemsLeft. */
+  @Type(() => Number)
+  @IsInt({ message: 'quantity must be a whole number' })
+  @Min(1)
+  @Max(1_000_000)
+  quantity: number;
+
+  /** GHS per unit for this buyer. Omit to inherit the lot's selling price. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsDecimalString({ intDigits: 12, fracDigits: 2 })
+  sellingPrice?: string | null;
+
+  @IsOptional()
+  @TrimToNull()
+  @MaxLength(500)
+  note?: string | null;
+}
+
 export class ArchiveGoodDto {
   @IsOptional()
   @TrimToNull()
   @MaxLength(500)
   reason?: string | null;
 }
+

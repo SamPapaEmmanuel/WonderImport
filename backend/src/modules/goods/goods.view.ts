@@ -23,12 +23,17 @@ export const goodListInclude = {
   supplier: { select: { id: true, name: true } },
   category: { select: { id: true, name: true } },
   checkedInBy: person,
+  allocations: { select: { id: true, quantity: true, clientId: true, client: { select: { id: true, code: true, name: true, isStock: true } } } },
 } satisfies Prisma.GoodInclude;
 
 export const goodDetailInclude = {
   ...goodInclude,
   statusHistory: { orderBy: { changedAt: 'asc' }, include: { changedBy: person } },
   snapshots: { orderBy: { createdAt: 'desc' }, take: 10, include: { createdBy: person } },
+  allocations: {
+    orderBy: { createdAt: 'asc' },
+    include: { client: { select: { id: true, code: true, name: true, isStock: true } }, createdBy: person },
+  },
 } satisfies Prisma.GoodInclude;
 
 export type GoodRow = Prisma.GoodGetPayload<{ include: typeof goodInclude }>;
@@ -44,13 +49,26 @@ export function toGoodView(g: GoodRow | GoodListRow) {
   const overriddenBy = 'overriddenBy' in g ? g.overriddenBy : null;
   const createdBy = 'createdBy' in g ? g.createdBy : null;
   const updatedBy = 'updatedBy' in g ? g.updatedBy : null;
+  const allocations = ('allocations' in g && Array.isArray(g.allocations) ? g.allocations : []).map((a) => ({
+    id: a.id,
+    quantity: a.quantity,
+    sellingPrice: 'sellingPrice' in a && a.sellingPrice != null ? a.sellingPrice.toString() : null,
+    note: 'note' in a ? (a.note as string | null) : null,
+    client: a.client,
+    createdBy: 'createdBy' in a ? (a.createdBy as { id: string; name: string } | null) : null,
+    createdAt: 'createdAt' in a && a.createdAt instanceof Date ? (a.createdAt as Date).toISOString() : null,
+  }));
+  const allocatedQty = allocations.reduce((n, a) => n + a.quantity, 0);
   return {
     id: g.id,
     itemName: g.itemName,
     trackingNumber: g.trackingNumber,
     quantity: g.quantity,
     quantitySold: g.quantitySold,
-    itemsLeft: g.quantity - g.quantitySold,
+    allocated: allocatedQty,
+    itemsLeft: Math.max(0, g.quantity - g.quantitySold - allocatedQty),
+    allocations,
+    buyers: allocations.map((a) => a.client),
     unitCost: g.unitCost.toString(),
     exchangeRate: g.exchangeRate.toString(),
     priceMultiplier: g.priceMultiplier.toString(),

@@ -12,4 +12,5 @@ ALTER TABLE public.audit_logs               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.import_batches           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.import_rows              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_settings             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.good_allocations          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public._prisma_migrations       ENABLE ROW LEVEL SECURITY;

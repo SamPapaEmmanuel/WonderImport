@@ -44,6 +44,8 @@ const EXPECTED: [string, string][] = [
   ['PATCH /goods/:id/status', 'ADMIN STAFF'],
   ['PATCH /goods/:id/china-check-in', 'ADMIN STAFF'],
   ['POST /goods/:id/duplicate', 'ADMIN STAFF'],
+  ['POST /goods/:id/allocations', 'ADMIN STAFF'],
+  ['GET /goods/:id/allocations', 'ANY_SIGNED_IN'],
   ['POST /goods/:id/archive', 'ADMIN STAFF'],
   ['POST /goods/:id/restore', 'ADMIN STAFF'],
   ['GET /health', 'PUBLIC'],
@@ -80,7 +82,7 @@ function actualRoutes(): [string, string][] {
     const base = Reflect.getMetadata(PATH_METADATA, ctrl) as string;
     const classRoles = Reflect.getMetadata(ROLES, ctrl) as string[] | undefined;
     for (const name of Object.getOwnPropertyNames(ctrl.prototype)) {
-      const handler = ctrl.prototype[name];
+      const handler = (ctrl.prototype as Record<string, any>)[name];
       const method = Reflect.getMetadata(METHOD_METADATA, handler) as RequestMethod | undefined;
       if (method === undefined || name === 'constructor') continue;
       const sub = Reflect.getMetadata(PATH_METADATA, handler) as string;

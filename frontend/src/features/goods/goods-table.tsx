@@ -15,7 +15,6 @@ interface GoodsTableProps {
   editable: boolean;
   sort: SortState;
   onSortChange: (s: SortState) => void;
-  onOpen: (g: Good) => void;
   onEdit: (g: Good) => void;
   onAdvance: (g: Good) => void;
   onCheckIn: (g: Good) => void;
@@ -49,9 +48,20 @@ export function GoodsTable(p: GoodsTableProps) {
       key: 'client',
       header: 'Client',
       sortKey: 'client',
-      cell: (g) => <span className={cn(g.client.isStock && 'text-ink-3')}>{g.client.isStock ? 'Stock' : g.client.name}</span>,
+      cell: (g) => (
+        <span className={cn(g.client.isStock && !g.buyers?.length && 'text-ink-3')} title={g.buyers?.length ? `Split buyers: ${g.buyers.map((b) => b.name).join(', ')}` : undefined}>
+          {g.client.isStock ? (g.buyers?.length ? `${g.buyers.length} buyer${g.buyers.length === 1 ? '' : 's'}` : 'Stock') : g.client.name}
+          {g.buyers?.length > 1 && <span className="ml-1 text-xs text-ink-3">+{g.buyers.length - 1}</span>}
+        </span>
+      ),
     },
-    { key: 'qty', header: 'Qty', sortKey: 'quantity', align: 'right', cell: (g) => count(g.quantity) },
+    {
+      key: 'qty',
+      header: 'Qty',
+      sortKey: 'quantity',
+      align: 'right',
+      cell: (g) => <span title={`${count(g.itemsLeft)} left`}>{count(g.quantity)}{g.itemsLeft < g.quantity && <span className="text-ink-3"> / {count(g.itemsLeft)} left</span>}</span>,
+    },
     { key: 'unit', header: 'Unit cost', align: 'right', cell: (g) => cny(g.unitCost) },
     { key: 'landed', header: 'Landed', sortKey: 'totalCost', align: 'right', cell: (g) => ghs(g.totalCost, { symbol: false }) },
     {
@@ -71,7 +81,7 @@ export function GoodsTable(p: GoodsTableProps) {
       key: 'status',
       header: 'Status',
       sortKey: 'status',
-      cell: (g) => <StatusCell good={g} editable={p.editable} onAdvance={p.onAdvance} onOpen={p.onOpen} />,
+      cell: (g) => <StatusCell good={g} editable={p.editable} onAdvance={p.onAdvance} />,
     },
     { key: 'checkin', header: 'Check-in', cell: (g) => <CheckInCell good={g} editable={p.editable} onCheckIn={p.onCheckIn} /> },
     { key: 'ordered', header: 'Ordered', sortKey: 'orderedAt', cell: (g) => <span className="text-ink-2">{date(g.dates.orderedAt)}</span> },
@@ -80,7 +90,7 @@ export function GoodsTable(p: GoodsTableProps) {
       header: <span className="sr-only">Actions</span>,
       className: 'w-10 pr-2',
       cell: (g) => (
-        <RowActions good={g} editable={p.editable} onView={p.onOpen} onEdit={p.onEdit} onDuplicate={p.onDuplicate} onArchive={p.onArchive} onRestore={p.onRestore} />
+        <RowActions good={g} editable={p.editable} onEdit={p.onEdit} onDuplicate={p.onDuplicate} onArchive={p.onArchive} onRestore={p.onRestore} />
       ),
     },
   ];
@@ -94,7 +104,6 @@ export function GoodsTable(p: GoodsTableProps) {
       loading={p.loading}
       sort={p.sort}
       onSortChange={p.onSortChange}
-      onRowClick={p.onOpen}
       rowClassName={(g) => (g.archivedAt ? 'text-ink-3' : undefined)}
       empty={p.empty}
     />

@@ -24,12 +24,23 @@ export interface ClientRank extends SumsWithMargin {
   name: string;
 }
 
+export interface AllocationShare {
+  clientId: string;
+  status: ShipmentStatus;
+  quantity: number;
+  totalCost: string;
+  expectedRevenue: string;
+  profit: string;
+}
+
 export interface DashboardInput {
   period: Period;
   byStatus: (PrismaGoodGroup & { status: ShipmentStatus })[];
   byClient: (PrismaGoodGroup & { clientId: string })[];
   missingByStatus: { status: ShipmentStatus; _count: { _all: number } }[];
   clients: ClientRef[];
+  /** Pro-rated shares of shared lots per buyer (see dashboard.service). */
+  allocationShares?: AllocationShare[];
 }
 
 export const PERIOD_DEFINITION = 'Goods ordered in this period, by order date. Archived goods are excluded. Margin is total profit ÷ total revenue.';
@@ -51,12 +62,35 @@ export function buildDashboardSummary(input: DashboardInput) {
   const clientIndex = new Map(input.clients.map((c) => [c.id, c]));
   let unassigned: (Sums & { clientId: string }) | null = null;
   const ranked: ClientRank[] = [];
+  const shareIndex = new Map<string, AllocationShare[]>();
+  for (const s of input.allocationShares ?? []) {
+    const list = shareIndex.get(s.clientId) ?? [];
+    list.push(s);
+    shareIndex.set(s.clientId, list);
+  }
+  const shareSums = (clientId: string): Sums => {
+    let out = emptySums();
+    for (const s of shareIndex.get(clientId) ?? []) {
+      out = addSums(out, { goods: 1, units: s.quantity, landedCost: s.totalCost, revenue: s.expectedRevenue, profit: s.profit });
+    }
+    return out;
+  };
   for (const g of input.byClient) {
     const c = clientIndex.get(g.clientId);
     if (!c) continue;
-    const sums = fromGroup(g);
+    const sums = addSums(fromGroup(g), shareSums(g.clientId));
     if (c.isStock) unassigned = unassigned ? { ...addSums(unassigned, sums), clientId: c.id } : { ...sums, clientId: c.id };
     else ranked.push({ id: c.id, code: c.code, name: c.name, ...withMargin(sums) });
+  }
+  // Buyers who only ever bought via split sales have no byClient row — add them.
+  for (const [clientId, shares] of shareIndex) {
+    if (input.byClient.some((g) => g.clientId === clientId)) continue;
+    const c = clientIndex.get(clientId);
+    if (!c || c.isStock) {
+      if (c?.isStock) unassigned = unassigned ? { ...addSums(unassigned, shareSums(clientId)), clientId: c.id } : { ...shareSums(clientId), clientId: c.id };
+      continue;
+    }
+    ranked.push({ id: c.id, code: c.code, name: c.name, ...withMargin(shareSums(clientId)) });
   }
 
   const top = (by: (r: ClientRank) => number) =>

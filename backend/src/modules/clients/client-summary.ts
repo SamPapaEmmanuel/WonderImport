@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { ShipmentStatus } from '../../generated/prisma/enums';
 import { addSums, emptySums, fromGroup, withMargin, type PrismaGoodGroup, type SumsWithMargin } from '../../common/finance/aggregate';
 
@@ -36,4 +37,24 @@ export function summariseByClient(rows: (PrismaGoodGroup & { clientId: string; s
     out.set(id, { ...withMargin(s), delivered: byStatus.DELIVERED, inProgress: s.goods - byStatus.DELIVERED, byStatus });
   }
   return out;
+}
+
+interface AllocationLot {
+  status: ShipmentStatus;
+  totalCost: { toString(): string };
+  expectedRevenue: { toString(): string };
+  profit: { toString(): string };
+}
+
+/** Adds one buyer's share of a shared lot to their summary: money pro-rated by units. */
+export function addAllocationShare(prev: ClientSummary | undefined, lot: AllocationLot, quantity: number, share: number): ClientSummary {
+  const base = prev ?? emptyClientSummary();
+  const money = (v: { toString(): string }) => new Decimal(v.toString()).times(share).toFixed(2);
+  const byStatus = { ...base.byStatus };
+  byStatus[lot.status] += 1;
+  const sums = addSums(
+    { goods: base.goods, units: base.units, landedCost: base.landedCost, revenue: base.revenue, profit: base.profit },
+    { goods: 1, units: quantity, landedCost: money(lot.totalCost), revenue: money(lot.expectedRevenue), profit: money(lot.profit) },
+  );
+  return { ...withMargin(sums), delivered: byStatus.DELIVERED, inProgress: sums.goods - byStatus.DELIVERED, byStatus };
 }

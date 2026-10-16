@@ -10,7 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService, changedFields } from '../audit/audit.service';
 import type { AuthUser } from '../auth/auth.types';
 import { SettingsService } from '../settings/settings.service';
-import type { ArchiveGoodDto, ChangeStatusDto, ChinaCheckInDto, CreateGoodDto, UpdateGoodDto } from './dto/good.dto';
+import type { AllocateGoodDto, ArchiveGoodDto, ChangeStatusDto, ChinaCheckInDto, CreateGoodDto, UpdateGoodDto } from './dto/good.dto';
 import type { GoodsFilterQuery } from './dto/list-goods.query';
 import { planFinancials, type FinancialPlan } from './goods-financials';
 import { goodsOrderBy, goodsWhere } from './goods-query';
@@ -78,7 +78,8 @@ export class GoodsService {
       { quantity: dto.quantity, unitCost: dto.unitCost, exchangeRate: dto.exchangeRate, sellingPrice: dto.sellingPrice, overrideReason: dto.overrideReason },
       { exchangeRate: pricing.defaultExchangeRate, multiplier: pricing.priceMultiplier },
     );
-    const errors = [...plan.errors, ...(await this.checkReferences(dto)), ...this.checkSold(dto.quantity, dto.quantitySold ?? 0)];
+    const allocationErrors = await this.checkCreateAllocations(dto);
+    const errors = [...plan.errors, ...(await this.checkReferences(dto)), ...this.checkSold(dto.quantity, dto.quantitySold ?? 0), ...allocationErrors];
     if (errors.length) throw AppException.validation(errors);
 
     const status = dto.status ?? ShipmentStatus.ORDERED;
@@ -115,6 +116,24 @@ export class GoodsService {
       await this.writeSnapshot(tx, g.id, plan, actor);
       await tx.goodsStatusHistory.create({ data: { goodId: g.id, fromStatus: null, toStatus: status, changedById: actor.id, note: 'Recorded' } });
       await this.audit.record({ entity: 'Good', entityId: g.id, action: AuditAction.CREATE, actorId: actor.id, after: { ...auditableGood(g), status, chinaCheckedIn: checkedIn }, requestId }, tx);
+      if (dto.allocations?.length) {
+        // One-step multi-buyer creation: each picked client gets their share now.
+        const names = new Map((await tx.client.findMany({ where: { id: { in: dto.allocations.map((a) => a.clientId) } }, select: { id: true, name: true } })).map((c) => [c.id, c.name]));
+        for (const a of dto.allocations) {
+          const created = await tx.goodAllocation.create({
+            data: { goodId: g.id, clientId: a.clientId, quantity: a.quantity, sellingPrice: a.sellingPrice ?? null, note: a.note ?? null, createdById: actor.id },
+          });
+          await this.audit.record(
+            {
+              entity: 'Good', entityId: g.id, action: AuditAction.UPDATE, actorId: actor.id,
+              after: { allocationId: created.id, clientId: a.clientId, quantity: a.quantity },
+              note: `Sold ${a.quantity} to ${names.get(a.clientId) ?? 'client'} at recording`,
+              requestId,
+            },
+            tx,
+          );
+        }
+      }
       if (plan.columns.priceOverridden) {
         await this.audit.record(
           { entity: 'Good', entityId: g.id, action: AuditAction.PRICE_OVERRIDE, actorId: actor.id, before: { suggestedPrice: plan.columns.suggestedPrice }, after: { sellingPrice: plan.columns.sellingPrice }, note: plan.columns.overrideReason, requestId },
@@ -285,6 +304,121 @@ export class GoodsService {
     return { data: toGoodView(await this.load(id)) };
   }
 
+  // ───────────────────────── Split sales (multi-client purchase) ─────────────────────────
+
+  /**
+   * Sells `dto.quantity` units of one stock lot to `dto.clientId`.
+   * Two or more clients can each hold an allocation on the same good at the
+   * same time. The row lock + single transaction means two staff checking out
+   * simultaneously can never oversell: the loser sees the reduced itemsLeft
+   * and gets a 409 with the fresh count.
+   */
+  async allocate(id: string, dto: AllocateGoodDto, actor: AuthUser, requestId?: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Lock the lot row so concurrent checkouts serialise on the database.
+      const locked = await tx.$queryRaw<Array<{ id: string; quantity: number; quantitySold: number }>>`
+        SELECT id, quantity, "quantitySold" FROM goods WHERE id = ${id}::uuid FOR UPDATE`;
+      if (!locked.length) throw AppException.notFound('Good');
+      const lot = locked[0];
+
+      const g = await tx.good.findUnique({ where: { id }, select: { id: true, archivedAt: true, sellingPrice: true } });
+      if (!g) throw AppException.notFound('Good');
+      if (g.archivedAt) throw new AppException(ErrorCode.CONFLICT, 'This good is archived. Restore it before selling.');
+
+      const client = await tx.client.findUnique({ where: { id: dto.clientId }, select: { id: true, name: true, archivedAt: true } });
+      if (!client) throw AppException.validation([{ field: 'clientId', code: 'not_found', message: 'That client no longer exists' }]);
+      if (client.archivedAt) {
+        throw new AppException(ErrorCode.CONFLICT, `${client.name} is archived. Restore the client before selling to them.`, [
+          { field: 'clientId', code: 'archived', message: 'That client is archived' },
+        ]);
+      }
+
+      const allocated = await tx.goodAllocation.aggregate({ where: { goodId: id }, _sum: { quantity: true } });
+      const allocatedQty = allocated._sum.quantity ?? 0;
+      const left = lot.quantity - lot.quantitySold - allocatedQty;
+      if (dto.quantity > left) {
+        throw new AppException(
+          ErrorCode.CONFLICT,
+          left <= 0 ? 'This good is sold out.' : `Only ${left} of ${lot.quantity} left on this good. Refresh to see the latest buyers.`,
+          [{ field: 'quantity', code: 'max', message: `Only ${Math.max(0, left)} left` }],
+          { itemsLeft: Math.max(0, left) },
+        );
+      }
+
+      const created = await tx.goodAllocation.create({
+        data: {
+          goodId: id,
+          clientId: dto.clientId,
+          quantity: dto.quantity,
+          sellingPrice: dto.sellingPrice ?? null,
+          note: dto.note ?? null,
+          createdById: actor.id,
+        },
+        include: {
+          client: { select: { id: true, code: true, name: true, isStock: true } },
+          createdBy: { select: { id: true, name: true } },
+        },
+      });
+
+      await this.audit.record(
+        {
+          entity: 'Good',
+          entityId: id,
+          action: AuditAction.UPDATE,
+          actorId: actor.id,
+          before: { itemsLeft: left },
+          after: { itemsLeft: left - dto.quantity, allocationId: created.id, clientId: dto.clientId, quantity: dto.quantity },
+          note: dto.note ?? `Sold ${dto.quantity} to ${client.name}`,
+          requestId,
+        },
+        tx,
+      );
+
+      return {
+        allocation: {
+          id: created.id,
+          quantity: created.quantity,
+          sellingPrice: created.sellingPrice ? created.sellingPrice.toString() : g.sellingPrice.toString(),
+          priceInherited: created.sellingPrice == null,
+          note: created.note,
+          client: created.client,
+          createdBy: created.createdBy,
+          createdAt: created.createdAt.toISOString(),
+        },
+        itemsLeft: left - dto.quantity,
+      };
+    });
+    return { data: await this.get(id), ...result };
+  }
+
+  async allocations(id: string) {
+    await this.load(id);
+    const rows = await this.prisma.goodAllocation.findMany({
+      where: { goodId: id },
+      orderBy: { createdAt: 'asc' },
+      include: { client: { select: { id: true, code: true, name: true, isStock: true } }, createdBy: { select: { id: true, name: true } } },
+    });
+    const good = await this.prisma.good.findUnique({ where: { id }, select: { quantity: true, quantitySold: true } });
+    const allocatedQty = rows.reduce((n, r) => n + r.quantity, 0);
+    return {
+      data: rows.map((r) => ({
+        id: r.id,
+        quantity: r.quantity,
+        sellingPrice: r.sellingPrice ? r.sellingPrice.toString() : null,
+        note: r.note,
+        client: r.client,
+        createdBy: r.createdBy,
+        createdAt: r.createdAt.toISOString(),
+      })),
+      meta: {
+        quantity: good?.quantity ?? 0,
+        legacySold: good?.quantitySold ?? 0,
+        allocated: allocatedQty,
+        itemsLeft: Math.max(0, (good?.quantity ?? 0) - (good?.quantitySold ?? 0) - allocatedQty),
+      },
+    };
+  }
+
   // ───────────────────────── Archive / duplicate ─────────────────────────
 
   async setArchived(id: string, archived: boolean, dto: ArchiveGoodDto, actor: AuthUser, requestId?: string) {
@@ -380,6 +514,34 @@ export class GoodsService {
     check('clientId', 'client', refs.clientId, client);
     check('supplierId', 'supplier', refs.supplierId, supplier);
     check('categoryId', 'category', refs.categoryId, category);
+    return errors;
+  }
+
+  /**
+   * Validates one-step multi-buyer creation: every buyer must exist and be
+   * active, no buyer twice, and the shares must fit inside the lot quantity
+   * together with any legacy quantitySold.
+   */
+  private async checkCreateAllocations(dto: CreateGoodDto): Promise<FieldError[]> {
+    const list = dto.allocations;
+    if (!list?.length) return [];
+    const errors: FieldError[] = [];
+    const seen = new Set<string>();
+    for (const [i, a] of list.entries()) {
+      if (seen.has(a.clientId)) errors.push({ field: `allocations[${i}].clientId`, code: 'duplicate', message: 'Choose each buying client only once' });
+      seen.add(a.clientId);
+    }
+    const rows = await this.prisma.client.findMany({ where: { id: { in: [...seen] } }, select: { id: true, name: true, archivedAt: true } });
+    const byId = new Map(rows.map((c) => [c.id, c]));
+    for (const [i, a] of list.entries()) {
+      const c = byId.get(a.clientId);
+      if (!c) errors.push({ field: `allocations[${i}].clientId`, code: 'not_found', message: 'That client no longer exists' });
+      else if (c.archivedAt) errors.push({ field: `allocations[${i}].clientId`, code: 'archived', message: `${c.name} is archived` });
+    }
+    const total = list.reduce((n, a) => n + a.quantity, 0) + (dto.quantitySold ?? 0);
+    if (total > dto.quantity) {
+      errors.push({ field: 'allocations', code: 'max', message: `The buyers' shares (${total}) are more than the quantity (${dto.quantity})` });
+    }
     return errors;
   }
 

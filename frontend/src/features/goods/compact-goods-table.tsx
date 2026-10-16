@@ -26,7 +26,7 @@ export function CompactGoodsTable({ rows, loading, empty, showClient = true }: {
         </div>
       ),
     },
-    { key: 'qty', header: 'Qty', align: 'right', cell: (g) => count(g.quantity) },
+    { key: 'qty', header: 'Qty', align: 'right', cell: (g) => <span title={`${count(g.itemsLeft)} left`}>{count(g.quantity)}{g.itemsLeft < g.quantity && <span className="text-ink-3"> / {count(g.itemsLeft)} left</span>}</span> },
     { key: 'unit', header: 'Unit cost', align: 'right', cell: (g) => cny(g.unitCost) },
     { key: 'landed', header: 'Landed', align: 'right', cell: (g) => ghs(g.totalCost, { symbol: false }) },
     {
@@ -57,7 +57,7 @@ export function CompactGoodsTable({ rows, loading, empty, showClient = true }: {
       rowKey={(g) => g.id}
       loading={loading}
       skeletonRows={6}
-      onRowClick={(g) => router.push(`/goods?good=${g.id}`)}
+      onRowClick={() => router.push('/goods')}
       empty={empty}
     />
   );

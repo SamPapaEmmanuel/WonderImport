@@ -19,7 +19,7 @@ export function goodsWhere(f: GoodsFilters): Prisma.GoodWhereInput {
   if (f.checkIn === 'no') and.push({ chinaCheckedIn: false });
   if (f.checkIn === 'missing') and.push({ chinaCheckedIn: false, status: { in: AT_OR_PAST_WAREHOUSE } });
 
-  if (f.clientId?.length) and.push({ clientId: { in: f.clientId } });
+  if (f.clientId?.length) and.push({ OR: [{ clientId: { in: f.clientId } }, { allocations: { some: { clientId: { in: f.clientId } } } }] });
   if (f.supplierId?.length) and.push({ supplierId: { in: f.supplierId } });
   if (f.categoryId?.length) and.push({ categoryId: { in: f.categoryId } });
 

@@ -8,7 +8,7 @@ import { archivedWhere } from '../../common/query/archived-filter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService, changedFields } from '../audit/audit.service';
 import type { AuthUser } from '../auth/auth.types';
-import { emptyClientSummary, summariseByClient, type ClientSummary } from './client-summary';
+import { addAllocationShare, emptyClientSummary, summariseByClient, type ClientSummary } from './client-summary';
 import type { CreateClientDto, ListClientsQuery, UpdateClientDto } from './dto/client.dto';
 
 export function toClientView(c: ClientRow, summary: ClientSummary = emptyClientSummary()) {
@@ -52,16 +52,40 @@ export class ClientsService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Profitability per client across all their active (non-archived) goods. */
+  /** Profitability per client across all their active (non-archived) goods, including split-stock allocations. */
   private async summaries(clientIds: string[]) {
     if (!clientIds.length) return new Map<string, ClientSummary>();
-    const rows = await this.prisma.good.groupBy({
-      by: ['clientId', 'status'],
-      where: { clientId: { in: clientIds }, archivedAt: null },
-      _count: { _all: true },
-      _sum: { quantity: true, totalCost: true, expectedRevenue: true, profit: true },
+    const [lots, allocs] = await Promise.all([
+      this.prisma.good.groupBy({
+        by: ['clientId', 'status'],
+        where: { clientId: { in: clientIds }, archivedAt: null },
+        _count: { _all: true },
+        _sum: { quantity: true, totalCost: true, expectedRevenue: true, profit: true },
+      }),
+      // Units of shared lots this client bought: pro-rate the lot's money by
+      // allocated units so each buyer sees their share. Lots already owned
+      // outright (clientId == buyer) are excluded to avoid double counting.
+      this.prisma.goodAllocation.groupBy({
+        by: ['clientId', 'goodId'],
+        where: { clientId: { in: clientIds }, good: { archivedAt: null, NOT: { clientId: { in: clientIds } } } },
+        _sum: { quantity: true },
+      }),
+    ]);
+    const map = summariseByClient(lots);
+    if (!allocs.length) return map;
+    const goods = await this.prisma.good.findMany({
+      where: { id: { in: [...new Set(allocs.map((a) => a.goodId))] } },
+      select: { id: true, clientId: true, status: true, quantity: true, totalCost: true, expectedRevenue: true, profit: true },
     });
-    return summariseByClient(rows);
+    const lotById = new Map(goods.map((g) => [g.id, g]));
+    for (const a of allocs) {
+      const lot = lotById.get(a.goodId);
+      if (!lot || lot.quantity <= 0) continue;
+      const qty = a._sum.quantity ?? 0;
+      const share = qty / lot.quantity;
+      map.set(a.clientId, addAllocationShare(map.get(a.clientId), lot, qty, share));
+    }
+    return map;
   }
 
   /** Every matching client with its totals, sorted. Shared by the list and the Excel export. */

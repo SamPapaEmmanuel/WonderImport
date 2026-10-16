@@ -16,7 +16,6 @@ import { useRequest } from '@/lib/use-request';
 import { useSessionStore } from '@/stores/session-store';
 import { goodsApi } from './api';
 import { activeFilterCount, EMPTY_FILTERS, parseFilters, toQueryString, type GoodsFilters } from './filters';
-import { GoodDetailDrawer } from './good-detail-drawer';
 import { GoodFormDrawer, type GoodFormMode } from './good-form-drawer';
 import { GoodsTable } from './goods-table';
 import { GoodsToolbar } from './goods-toolbar';
@@ -25,7 +24,7 @@ import { useGoodsActions } from './use-goods-actions';
 import { ExportButton } from '@/features/exports/export-button';
 
 /**
- * Goods workspace. The URL is the source of truth for filters, sorting, paging and the open good (?good=<id>),
+ * Goods workspace. The URL is the source of truth for filters, sorting, and paging,
  * so any view can be bookmarked or shared, and Back behaves as expected.
  */
 export function GoodsScreen() {
@@ -37,9 +36,7 @@ export function GoodsScreen() {
 
   const filters = useMemo(() => parseFilters(new URLSearchParams(sp.toString())), [sp]);
   const apiQuery = toQueryString(filters);
-  const openId = sp.get('good');
   const [form, setForm] = useState<GoodFormMode | null>(null);
-  const [detailVersion, setDetailVersion] = useState(0);
 
   // Restore this session's last filters when Goods is opened without any.
   const { lastQuery, setLastQuery } = useGoodsSession();
@@ -52,13 +49,11 @@ export function GoodsScreen() {
   const list = useRequest(() => goodsApi.list(apiQuery), [apiQuery]);
 
   const navigate = useCallback(
-    (next: GoodsFilters, good: string | null = openId) => {
-      const qs = new URLSearchParams(toQueryString(next));
-      if (good) qs.set('good', good);
-      const s = qs.toString();
+    (next: GoodsFilters) => {
+      const s = toQueryString(next);
       router.replace(s ? `${pathname}?${s}` : pathname, { scroll: false });
     },
-    [openId, pathname, router],
+    [pathname, router],
   );
 
   // "Add good" links from elsewhere (e.g. the dashboard) arrive as ?new=1.
@@ -75,18 +70,13 @@ export function GoodsScreen() {
     navigate({ ...filters, ...patch, page: resetsPage ? 1 : (patch.page ?? 1) });
   };
 
-  const openGood = (id: string | null) => navigate(filters, id);
-
   const applyLocal = (id: string, patch: Partial<Good>) =>
     list.mutate((d) => (d ? ({ ...d, data: d.data.map((g) => (g.id === id ? { ...g, ...patch } : g)) } as Paginated<Good>) : d));
 
   const actions = useGoodsActions({
     applyLocal,
     onChanged: (g) => (g.archivedAt && filters.archived === 'exclude' ? void list.reload() : applyLocal(g.id, g)),
-    onDuplicated: (g) => {
-      void list.reload();
-      openGood(g.id);
-    },
+    onDuplicated: () => void list.reload(),
     onStale: () => void list.reload(),
   });
 
@@ -127,7 +117,6 @@ export function GoodsScreen() {
             editable={editable}
             sort={sort}
             onSortChange={(s) => setFilters({ sort: `${s.key}:${s.dir}` })}
-            onOpen={(g) => openGood(g.id)}
             onEdit={(g) => setForm({ mode: 'edit', good: g })}
             onAdvance={actions.advance}
             onCheckIn={(g) => void actions.setCheckIn(g, true)}
@@ -161,26 +150,12 @@ export function GoodsScreen() {
 
       {actions.dialogs}
 
-      <GoodDetailDrawer
-        goodId={openId}
-        version={detailVersion}
-        onClose={() => openGood(null)}
-        onEdit={(g) => setForm({ mode: 'edit', good: g })}
-        onChanged={(g) => applyLocal(g.id, g)}
-        onDuplicated={(g) => {
-          void list.reload();
-          openGood(g.id);
-        }}
-      />
-
       <GoodFormDrawer
         state={form}
         onClose={() => setForm(null)}
-        onSaved={(saved, mode) => {
+        onSaved={() => {
           setForm(null);
           void list.reload();
-          if (mode === 'create') openGood(saved.id);
-          else if (openId === saved.id) setDetailVersion((v) => v + 1);
         }}
       />
     </>

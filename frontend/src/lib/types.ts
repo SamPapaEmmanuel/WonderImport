@@ -84,7 +84,12 @@ export interface Good {
   trackingNumber: string | null;
   quantity: number;
   quantitySold: number;
+  /** Units sold via split sales (sum of allocations). */
+  allocated: number;
   itemsLeft: number;
+  /** Every buyer holding units of this lot (split sales). */
+  allocations: Allocation[];
+  buyers: { id: string; code: string; name: string; isStock: boolean }[];
   unitCost: string;
   exchangeRate: string;
   priceMultiplier: string;
@@ -161,6 +166,28 @@ export interface AuditEntry {
 export interface StatusChangeResult {
   data: Good;
   warnings: 'CHINA_CHECK_IN_PENDING'[];
+}
+
+export interface Allocation {
+  id: string;
+  quantity: number;
+  /** GHS per unit for this buyer; null inherits the lot's selling price. */
+  sellingPrice: string | null;
+  note: string | null;
+  client: { id: string; code: string; name: string; isStock: boolean };
+  createdBy: PersonRef | null;
+  createdAt: string | null;
+}
+
+export interface AllocationsResult {
+  data: Allocation[];
+  meta: { quantity: number; legacySold: number; allocated: number; itemsLeft: number };
+}
+
+export interface AllocateResult {
+  data: GoodDetail;
+  allocation: Allocation & { priceInherited: boolean };
+  itemsLeft: number;
 }
 
 export interface Client {

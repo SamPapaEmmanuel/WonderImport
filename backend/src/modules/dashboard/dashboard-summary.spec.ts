@@ -66,4 +66,23 @@ describe('buildDashboardSummary', () => {
   it('uses weighted margin per client', () => {
     expect(s.leadingClients.profit[0]).toMatchObject({ name: 'Cons', profit: '189.90', margin: '63.30' });
   });
+
+  it('attributes split-sale shares to each buyer without breaking reconciliation', () => {
+    // Shared lot of 10 owned by Stock: Ama takes 6, Lucy takes 4.
+    // Lot money: cost 100, revenue 300, profit 200 → 60/180/120 + 40/120/80.
+    const shared = buildDashboardSummary({
+      ...input,
+      clients: [...clients, { id: 'ama', code: 'CL-003', name: 'Ama', isStock: false }],
+      allocationShares: [
+        { clientId: 'ama', status: S.DELIVERED, quantity: 6, totalCost: '60.00', expectedRevenue: '180.00', profit: '120.00' },
+        { clientId: 'lucy', status: S.DELIVERED, quantity: 4, totalCost: '40.00', expectedRevenue: '120.00', profit: '80.00' },
+      ],
+    });
+    const ama = shared.leadingClients.revenue.find((c) => c.name === 'Ama')!;
+    expect(ama).toMatchObject({ revenue: '180.00', profit: '120.00' });
+    const lucy = shared.leadingClients.revenue.find((c) => c.name === 'Lucy')!;
+    expect(lucy.revenue).toBe(new Decimal('75.00').plus('120.00').toFixed(2));
+    // Rankings still cover every named buyer.
+    expect(shared.leadingClients.namedClients).toBe(3);
+  });
 });

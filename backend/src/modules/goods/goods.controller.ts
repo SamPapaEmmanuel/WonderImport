@@ -3,7 +3,7 @@ import { Role } from '../../generated/prisma/enums';
 import type { AuthedRequest, AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { ArchiveGoodDto, ChangeStatusDto, ChinaCheckInDto, CreateGoodDto, UpdateGoodDto } from './dto/good.dto';
+import { AllocateGoodDto, ArchiveGoodDto, ChangeStatusDto, ChinaCheckInDto, CreateGoodDto, UpdateGoodDto } from './dto/good.dto';
 import { GoodsFilterQuery } from './dto/list-goods.query';
 import { GoodsService } from './goods.service';
 
@@ -59,6 +59,23 @@ export class GoodsController {
   @Post(':id/duplicate')
   async duplicate(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser, @Req() req: AuthedRequest) {
     return { data: await this.goods.duplicate(id, user, req.id) };
+  }
+
+  /**
+   * Sells units of one stock lot to a client. Repeat for each buyer — two or
+   * more clients can purchase the same good at the same time until itemsLeft
+   * hits zero. Oversell attempts get 409 CONFLICT with the fresh itemsLeft.
+   */
+  @Roles(...WRITERS)
+  @Post(':id/allocations')
+  async allocate(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AllocateGoodDto, @CurrentUser() user: AuthUser, @Req() req: AuthedRequest) {
+    return this.goods.allocate(id, dto, user, req.id);
+  }
+
+  /** Every buyer holding units of this good, plus the remaining count. */
+  @Get(':id/allocations')
+  async allocations(@Param('id', ParseUUIDPipe) id: string) {
+    return this.goods.allocations(id);
   }
 
   @Roles(...WRITERS)

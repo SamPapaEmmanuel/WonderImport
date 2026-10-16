@@ -7,7 +7,7 @@ import { nextStatus, STATUS_META } from '@/lib/status';
 import type { Good } from '@/lib/types';
 
 /** Status badge that doubles as a one-step "move to next stage" control for staff and admins. */
-export function StatusCell({ good, editable, onAdvance, onOpen }: { good: Good; editable: boolean; onAdvance: (g: Good) => void; onOpen: (g: Good) => void }) {
+export function StatusCell({ good, editable, onAdvance }: { good: Good; editable: boolean; onAdvance: (g: Good) => void }) {
   const next = nextStatus(good.status);
   if (!editable || !next || good.archivedAt) return <StatusBadge status={good.status} />;
 
@@ -22,8 +22,6 @@ export function StatusCell({ good, editable, onAdvance, onOpen }: { good: Good; 
           hint: missingCheckIn ? 'China check-in not recorded yet' : undefined,
           onSelect: () => onAdvance(good),
         },
-        'separator',
-        { label: 'Open timeline', onSelect: () => onOpen(good) },
       ]}
       trigger={(props) => (
         <button

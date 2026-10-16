@@ -82,6 +82,7 @@ model User {
   auditLogs        AuditLog[]
   importBatches    ImportBatch[]
   settingsUpdated  AppSetting[]
+  allocations      GoodAllocation[]
 
   @@map("users")
 }
@@ -103,6 +104,9 @@ model Client {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   goods Good[]
+
+  /// Shares of stock lots sold to this client (see GoodAllocation).
+  allocations GoodAllocation[]
 
   @@index([name])
   @@map("clients")
@@ -205,6 +209,9 @@ model Good {
   statusHistory GoodsStatusHistory[]
   snapshots     GoodFinancialSnapshot[]
   importRows    ImportRow[]
+  /// Per-client shares sold out of this stock lot. SUM(allocations) + legacy
+  /// quantitySold must never exceed quantity — enforced by the allocate endpoint.
+  allocations   GoodAllocation[]
 
   @@index([trackingNumber])
   @@index([status])
@@ -257,6 +264,32 @@ model GoodFinancialSnapshot {
 
   @@index([goodId, createdAt])
   @@map("good_financial_snapshots")
+}
+
+/// One buyer's share of a shared stock lot: `quantity` units of `goodId` sold
+/// to `clientId`. Two or more clients can each hold an allocation on the same
+/// good at the same time; the allocate endpoint consumes `itemsLeft`
+/// atomically so concurrent checkouts can never oversell.
+model GoodAllocation {
+  id        String  @id @default(uuid()) @db.Uuid
+  goodId    String  @map("good_id") @db.Uuid
+  clientId  String  @map("client_id") @db.Uuid
+  quantity  Int
+  /// GHS per unit for this buyer. Null inherits the lot's sellingPrice.
+  sellingPrice Decimal? @map("selling_price") @db.Decimal(14, 2)
+  note      String?
+
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  good      Good   @relation(fields: [goodId], references: [id], onDelete: Cascade)
+  client    Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdBy User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([goodId])
+  @@index([clientId])
+  @@index([goodId, createdAt])
+  @@map("good_allocations")
 }
 
 // ───────────────────────── Audit ─────────────────────────

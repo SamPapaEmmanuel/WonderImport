@@ -11,7 +11,8 @@ describe('goods query', () => {
     expect(w.AND).toEqual(
       expect.arrayContaining([
         { status: { in: ['IN_TRANSIT', 'ARRIVED'] } },
-        { clientId: { in: ['c1'] } },
+        // A client matches as lot owner OR as a split-sale buyer of the lot.
+        { OR: [{ clientId: { in: ['c1'] } }, { allocations: { some: { clientId: { in: ['c1'] } } } }] },
         { orderedAt: { gte: new Date('2026-06-01T00:00:00.000Z'), lte: new Date('2026-06-30T00:00:00.000Z') } },
       ]),
     );
