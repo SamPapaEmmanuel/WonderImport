@@ -2,27 +2,73 @@
 
 import { ChevronDown } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/badge';
-import { Menu } from '@/components/ui/menu';
-import { nextStatus, STATUS_META } from '@/lib/status';
-import type { Good } from '@/lib/types';
+import { Menu, type MenuItem } from '@/components/ui/menu';
+import { nextStatus, SHIPMENT_FLOW, STATUS_META } from '@/lib/status';
+import type { Good, ShipmentStatus } from '@/lib/types';
+import { useSessionStore } from '@/stores/session-store';
 
-/** Status badge that doubles as a one-step "move to next stage" control for staff and admins. */
-export function StatusCell({ good, editable, onAdvance }: { good: Good; editable: boolean; onAdvance: (g: Good) => void }) {
+interface StatusCellProps {
+  good: Good;
+  editable: boolean;
+  onAdvance: (g: Good) => void;
+  onMoveTo: (g: Good, to: ShipmentStatus, opts: { correction?: boolean; note?: string }) => void;
+}
+
+/**
+ * Status badge that opens a pick-from-list dropdown of all six stages.
+ * - Next stage: normal move (keeps the "move without check-in" confirm).
+ * - Earlier stages: administrator corrections (fixed history note).
+ * - Further-forward stages: disabled — the API rejects skipping stages.
+ */
+export function StatusCell({ good, editable, onAdvance, onMoveTo }: StatusCellProps) {
+  const role = useSessionStore((s) => s.me?.role);
+  if (!editable || good.archivedAt) return <StatusBadge status={good.status} />;
+
   const next = nextStatus(good.status);
-  if (!editable || !next || good.archivedAt) return <StatusBadge status={good.status} />;
-
+  const currentIdx = SHIPMENT_FLOW.indexOf(good.status);
   const missingCheckIn = good.status === 'CHINA_WAREHOUSE' && !good.chinaCheckedIn;
+
+  const dot = (s: ShipmentStatus) => (
+    <span aria-hidden className="mt-1.5 size-2 flex-none rounded-full" style={{ backgroundColor: STATUS_META[s].color }} />
+  );
+
+  const items: MenuItem[] = SHIPMENT_FLOW.map((s) => {
+    const idx = SHIPMENT_FLOW.indexOf(s);
+    if (s === good.status) {
+      return { label: `${STATUS_META[s].label} (current)`, icon: dot(s), disabled: true, onSelect: () => undefined };
+    }
+    if (next && s === next) {
+      return {
+        label: `Move to ${STATUS_META[s].label}`,
+        icon: dot(s),
+        hint: missingCheckIn ? 'China check-in not recorded yet' : undefined,
+        onSelect: () => onAdvance(good),
+      };
+    }
+    if (idx < currentIdx) {
+      const allowed = role === 'ADMIN';
+      return {
+        label: STATUS_META[s].label,
+        icon: dot(s),
+        hint: allowed ? 'Correction — recorded in the history' : 'Administrators only',
+        disabled: !allowed,
+        onSelect: () => onMoveTo(good, s, { correction: true, note: 'Status corrected from the Goods list' }),
+      };
+    }
+    return {
+      label: STATUS_META[s].label,
+      icon: dot(s),
+      hint: 'Move one stage at a time',
+      disabled: true,
+      onSelect: () => undefined,
+    };
+  });
+
   return (
     <Menu
       align="start"
       header="Shipment status"
-      items={[
-        {
-          label: `Move to ${STATUS_META[next].label}`,
-          hint: missingCheckIn ? 'China check-in not recorded yet' : undefined,
-          onSelect: () => onAdvance(good),
-        },
-      ]}
+      items={items}
       trigger={(props) => (
         <button
           type="button"

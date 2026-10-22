@@ -325,7 +325,7 @@ export function GoodFormDrawer({ state, onClose, onSaved }: Props) {
                     : 'Tick every client buying this good — e.g. Anita, Cons and Grace.'
                 }
               >
-                <>
+                <div>
                 <div className="max-h-44 overflow-auto rounded-control border border-line bg-surface px-2 py-1.5">
                   {lookups?.clients.map((c) => {
                     const checked = form.buyerIds.includes(c.id);
@@ -372,7 +372,7 @@ export function GoodFormDrawer({ state, onClose, onSaved }: Props) {
                     {form.buyerIds.length} selected: {form.buyerIds.map((id) => lookups?.clients.find((c) => c.id === id)?.name ?? '…').join(', ')}
                   </p>
                 )}
-                </>
+                </div>
               </Field>
             ) : (
               <Field label="Client" error={errors.clientId}>

@@ -120,7 +120,10 @@ async function ensureSupabaseLogin(email: string, password: string, name: string
     }
   }
 
-  // Fallback: Check auth.users directly in the database
+  // Fallback: check auth.users directly in the database. Without the
+  // service-role key we cannot create or verify a password, so only link an
+  // account whose email matches exactly. Never fall back to "any user": that
+  // would link the admin row to someone else's login.
   const directUsers = await prisma.$queryRawUnsafe<Array<{ id: string; email: string }>>(
     `SELECT id, email FROM auth.users WHERE lower(email) = lower($1) LIMIT 1`,
     email,
@@ -130,17 +133,9 @@ async function ensureSupabaseLogin(email: string, password: string, name: string
     return { id: directUsers[0].id, email: directUsers[0].email };
   }
 
-  // Check if any registered user exists in auth.users
-  const anyUser = await prisma.$queryRawUnsafe<Array<{ id: string; email: string }>>(
-    `SELECT id, email FROM auth.users ORDER BY created_at ASC LIMIT 1`,
-  );
-  if (anyUser.length > 0 && anyUser[0]?.id) {
-    console.log(`Using existing Supabase Auth user: ${anyUser[0].email} (${anyUser[0].id})`);
-    return { id: anyUser[0].id, email: anyUser[0].email };
-  }
-
   throw new Error(
-    `No user found in Supabase Auth. Set SUPABASE_SERVICE_ROLE_KEY or sign up at http://localhost:3000/login first.`,
+    `No Supabase Auth account for ${email}. Without SUPABASE_SERVICE_ROLE_KEY the seed cannot create one: ` +
+      `invite ${email} in Supabase (Authentication -> Users -> Invite), or open the invite link to set a password, then re-run the seed.`,
   );
 }
 

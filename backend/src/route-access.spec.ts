@@ -22,6 +22,7 @@ import { UsersController } from './modules/users/users.controller';
  */
 const EXPECTED: [string, string][] = [
   ['GET /auth/me', 'ANY_SIGNED_IN'],
+  ['GET /auth/debug-token', 'PUBLIC'],
   ['GET /categories', 'ANY_SIGNED_IN'],
   ['POST /categories', 'ADMIN'],
   ['PATCH /categories/:id', 'ADMIN'],
@@ -109,7 +110,7 @@ describe('route access', () => {
     expect(offending).toEqual([]);
   });
 
-  it('keeps only the health check public', () => {
-    expect(actual.filter(([, a]) => a === 'PUBLIC').map(([r]) => r)).toEqual(['GET /health']);
+  it('keeps only the health check and the temporary token debugger public', () => {
+    expect(actual.filter(([, a]) => a === 'PUBLIC').map(([r]) => r)).toEqual(['GET /auth/debug-token', 'GET /health']);
   });
 });

@@ -119,7 +119,8 @@ export function GoodsScreen() {
             onSortChange={(s) => setFilters({ sort: `${s.key}:${s.dir}` })}
             onEdit={(g) => setForm({ mode: 'edit', good: g })}
             onAdvance={actions.advance}
-            onCheckIn={(g) => void actions.setCheckIn(g, true)}
+            onMoveTo={(g, to, opts) => void actions.moveTo(g, to, opts)}
+            onCheckIn={(g, checkedIn) => void actions.checkInAndMove(g, checkedIn)}
             onDuplicate={(g) => void actions.duplicate(g)}
             onArchive={actions.archive}
             onRestore={(g) => void actions.restore(g)}

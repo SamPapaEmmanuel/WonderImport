@@ -1,11 +1,11 @@
-import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from 'react';
+import { cloneElement, isValidElement, useId, Fragment, type ReactElement, type ReactNode } from 'react';
 
 interface FieldProps {
   label: string;
   hint?: ReactNode;
   error?: string;
   /** A single Input, Select or textarea; it receives id, aria-describedby and invalid. */
-  children: ReactElement<Record<string, unknown>>;
+  children: ReactElement<Record<string, unknown>> | ReactNode;
   className?: string;
 }
 
@@ -13,9 +13,17 @@ interface FieldProps {
 export function Field({ label, hint, error, children, className }: FieldProps) {
   const id = useId();
   const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
-  const control = isValidElement(children)
-    ? cloneElement(children, { id, 'aria-describedby': describedBy, invalid: Boolean(error) || undefined })
-    : children;
+  const isFragment = isValidElement(children) && children.type === Fragment;
+  const isHtmlTag = isValidElement(children) && typeof children.type === 'string';
+
+  const control =
+    isValidElement(children) && !isFragment
+      ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+          id: (children.props as { id?: string }).id ?? id,
+          'aria-describedby': (children.props as { 'aria-describedby'?: string })['aria-describedby'] ?? describedBy,
+          ...(isHtmlTag ? {} : { invalid: Boolean(error) || undefined }),
+        })
+      : children;
 
   return (
     <div className={className}>

@@ -17,7 +17,7 @@ export function configureApp(app: NestExpressApplication) {
   app.use(
     helmet({
       contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },
-      crossOriginResourcePolicy: { policy: 'same-site' },
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
   app.use((_req: unknown, res: { setHeader(k: string, v: string): void }, next: () => void) => {

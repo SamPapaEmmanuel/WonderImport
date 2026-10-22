@@ -106,12 +106,14 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && code === 'UNAUTHENTICATED' && typeof window !== 'undefined') {
       try {
-        await supabaseBrowser().auth.signOut();
+        await supabaseBrowser().auth.signOut({ scope: 'local' });
       } catch {
         // Ignore errors if the session was already purged or revoked
       }
       const next = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.assign(`/login?expired=1&next=${next}`);
+      // Never resolve — the page is navigating away; don't show the error screen.
+      return new Promise(() => {});
     }
 
     throw ApiError.from(error);

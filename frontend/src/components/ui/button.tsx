@@ -29,13 +29,14 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', loading = false, disabled, className, children, type = 'button', ...rest },
+  { variant = 'secondary', size = 'md', loading = false, disabled, className, children, type = 'button', form, ...rest },
   ref,
 ) {
   return (
     <button
       ref={ref}
       type={type}
+      form={form}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(

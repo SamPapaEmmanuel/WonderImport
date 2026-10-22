@@ -1,0 +1,13 @@
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE & agent artifacts
+.agents/
+.kiro/
+.DS_Store
+Thumbs.db

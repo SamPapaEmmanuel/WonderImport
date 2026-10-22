@@ -5,6 +5,26 @@ import { publicEnv } from '../env';
 const PUBLIC_PATHS = ['/login', '/auth/confirm', '/auth/set-password'];
 
 /**
+ * Matches every Supabase auth cookie @supabase/ssr may write:
+ * - sb-<ref>-auth-token (small sessions)
+ * - sb-<ref>-auth-token.0, .1, ... (large JWTs split into chunks)
+ * - sb-<ref>-auth-token-code-verifier (PKCE flow)
+ * A strict endsWith('-auth-token') misses the chunked variants and the proxy
+ * then thinks a freshly signed-in user has no session → /dashboard bounces to /login.
+ */
+function isAuthCookie(name: string): boolean {
+  return name.startsWith('sb-') && name.includes('-auth-token');
+}
+
+function clearAuthCookies(request: NextRequest, response: NextResponse) {
+  request.cookies.getAll().forEach((c) => {
+    if (isAuthCookie(c.name)) {
+      response.cookies.delete(c.name);
+    }
+  });
+}
+
+/**
  * Refreshes the Supabase session cookie and protects app routes.
  * Uses getSession() (cookie read, no network) for speed — the API still
  * verifies every token with JWKS, so an expired token fails safely there
@@ -34,11 +54,7 @@ export async function updateSession(request: NextRequest) {
       // If arriving with expired=1, don't attempt to get/refresh the session;
       // purge the stale auth cookie so the browser stops sending dead tokens.
       if (request.nextUrl.searchParams.get('expired') === '1') {
-        request.cookies.getAll().forEach((c) => {
-          if (c.name.startsWith('sb-') && c.name.endsWith('-auth-token')) {
-            response.cookies.delete(c.name);
-          }
-        });
+        clearAuthCookies(request, response);
         return response;
       }
 
@@ -54,26 +70,18 @@ export async function updateSession(request: NextRequest) {
           return NextResponse.redirect(url);
         }
         if (error) {
-          request.cookies.getAll().forEach((c) => {
-            if (c.name.startsWith('sb-') && c.name.endsWith('-auth-token')) {
-              response.cookies.delete(c.name);
-            }
-          });
+          clearAuthCookies(request, response);
         }
       } catch {
         // Stale or revoked token: clear auth cookies so the page renders cleanly.
-        request.cookies.getAll().forEach((c) => {
-          if (c.name.startsWith('sb-') && c.name.endsWith('-auth-token')) {
-            response.cookies.delete(c.name);
-          }
-        });
+        clearAuthCookies(request, response);
       }
     }
     return response;
   }
 
   // Fast path: no auth cookies at all → definitely signed out.
-  const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'));
+  const hasAuthCookie = request.cookies.getAll().some((c) => isAuthCookie(c.name));
   if (!hasAuthCookie) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';

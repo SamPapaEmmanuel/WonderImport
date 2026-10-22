@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { DataTable, type Column, type SortState } from '@/components/ui/data-table';
 import { cn } from '@/lib/cn';
 import { cny, count, date, ghs, percent } from '@/lib/format';
-import type { Good } from '@/lib/types';
+import type { Good, ShipmentStatus } from '@/lib/types';
 import { CheckInCell } from './check-in-cell';
 import { RowActions } from './row-actions';
 import { StatusCell } from './status-cell';
@@ -17,7 +17,8 @@ interface GoodsTableProps {
   onSortChange: (s: SortState) => void;
   onEdit: (g: Good) => void;
   onAdvance: (g: Good) => void;
-  onCheckIn: (g: Good) => void;
+  onMoveTo: (g: Good, to: ShipmentStatus, opts: { correction?: boolean; note?: string }) => void;
+  onCheckIn: (g: Good, checkedIn: boolean) => void;
   onDuplicate: (g: Good) => void;
   onArchive: (g: Good) => void;
   onRestore: (g: Good) => void;
@@ -48,12 +49,32 @@ export function GoodsTable(p: GoodsTableProps) {
       key: 'client',
       header: 'Client',
       sortKey: 'client',
-      cell: (g) => (
-        <span className={cn(g.client.isStock && !g.buyers?.length && 'text-ink-3')} title={g.buyers?.length ? `Split buyers: ${g.buyers.map((b) => b.name).join(', ')}` : undefined}>
-          {g.client.isStock ? (g.buyers?.length ? `${g.buyers.length} buyer${g.buyers.length === 1 ? '' : 's'}` : 'Stock') : g.client.name}
-          {g.buyers?.length > 1 && <span className="ml-1 text-xs text-ink-3">+{g.buyers.length - 1}</span>}
-        </span>
-      ),
+      cell: (g) => {
+        if (g.allocations && g.allocations.length > 0) {
+          const detail = g.allocations.map((a) => `${a.client.name} (${a.quantity})`).join(', ');
+          const preview = g.allocations.slice(0, 2).map((a) => `${a.client.name} (${a.quantity})`).join(', ');
+          return (
+            <span title={`Split buyers: ${detail}`}>
+              <span className="font-medium text-ink">{preview}</span>
+              {g.allocations.length > 2 && <span className="ml-1 text-xs text-ink-3">+{g.allocations.length - 2}</span>}
+            </span>
+          );
+        }
+        if (g.buyers && g.buyers.length > 0) {
+          const names = g.buyers.map((b) => b.name).join(', ');
+          return (
+            <span title={`Split buyers: ${names}`}>
+              <span className="font-medium text-ink">{g.buyers.slice(0, 2).map((b) => b.name).join(', ')}</span>
+              {g.buyers.length > 2 && <span className="ml-1 text-xs text-ink-3">+{g.buyers.length - 2}</span>}
+            </span>
+          );
+        }
+        return (
+          <span className={cn(g.client.isStock && 'text-ink-3')}>
+            {g.client.isStock ? 'Stock' : g.client.name}
+          </span>
+        );
+      },
     },
     {
       key: 'qty',
@@ -81,7 +102,7 @@ export function GoodsTable(p: GoodsTableProps) {
       key: 'status',
       header: 'Status',
       sortKey: 'status',
-      cell: (g) => <StatusCell good={g} editable={p.editable} onAdvance={p.onAdvance} />,
+      cell: (g) => <StatusCell good={g} editable={p.editable} onAdvance={p.onAdvance} onMoveTo={p.onMoveTo} />,
     },
     { key: 'checkin', header: 'Check-in', cell: (g) => <CheckInCell good={g} editable={p.editable} onCheckIn={p.onCheckIn} /> },
     { key: 'ordered', header: 'Ordered', sortKey: 'orderedAt', cell: (g) => <span className="text-ink-2">{date(g.dates.orderedAt)}</span> },

@@ -5,7 +5,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api-error';
-import { nextStatus, STATUS_META } from '@/lib/status';
+import { nextStatus, SHIPMENT_FLOW, STATUS_META } from '@/lib/status';
 import type { Good, ShipmentStatus } from '@/lib/types';
 import { toast } from '@/stores/toast-store';
 import { goodsApi } from './api';
@@ -73,6 +73,67 @@ export function useGoodsActions({ applyLocal = () => undefined, onChanged, onDup
       toast.error('Check-in not saved', ApiError.from(e).message);
       return null;
     }
+  }
+
+  /**
+   * Tick-box flow.
+   * - Tick: check in, then walk the status forward to China warehouse one
+   *   stage at a time (the API rejects skipping stages).
+   * - Untick (administrators only): remove the check-in, then walk the
+   *   status back to Ordered one stage at a time as corrections. Staff
+   *   never reach this path — their box is locked.
+   */
+  async function checkInAndMove(g: Good, checkedIn: boolean) {
+    if (!checkedIn) {
+      const updated = await setCheckIn(g, false, true);
+      if (!updated) return;
+      let current = updated;
+      let moved = false;
+      const note = 'Check-in removed from the Goods list';
+      while (SHIPMENT_FLOW.indexOf(current.status) > SHIPMENT_FLOW.indexOf('ORDERED')) {
+        const idx = SHIPMENT_FLOW.indexOf(current.status);
+        const to = SHIPMENT_FLOW[idx - 1];
+        applyLocal(current.id, { status: to });
+        try {
+          const res = await goodsApi.changeStatus(current.id, { status: to, expectedStatus: current.status, correction: true, note });
+          applyLocal(current.id, res.data);
+          onChanged?.(res.data);
+          current = res.data;
+          moved = true;
+        } catch (e) {
+          applyLocal(current.id, { status: current.status });
+          const err = ApiError.from(e);
+          toast.error('Check-in removed, but status not changed', err.message);
+          if (err.code === 'CONFLICT') onStale?.();
+          return;
+        }
+      }
+      toast.success(moved ? `${g.itemName} check-in removed and moved back to Ordered` : 'China check-in removed');
+      return;
+    }
+    const updated = await setCheckIn(g, true, true);
+    if (!updated) return;
+    let current = updated;
+    let moved = false;
+    while (SHIPMENT_FLOW.indexOf(current.status) < SHIPMENT_FLOW.indexOf('CHINA_WAREHOUSE')) {
+      const to = nextStatus(current.status);
+      if (!to) break;
+      applyLocal(current.id, { status: to });
+      try {
+        const res = await goodsApi.changeStatus(current.id, { status: to, expectedStatus: current.status });
+        applyLocal(current.id, res.data);
+        onChanged?.(res.data);
+        current = res.data;
+        moved = true;
+      } catch (e) {
+        applyLocal(current.id, { status: current.status });
+        const err = ApiError.from(e);
+        toast.error('Check-in saved, but status not changed', err.message);
+        if (err.code === 'CONFLICT') onStale?.();
+        return;
+      }
+    }
+    toast.success(moved ? `${g.itemName} checked in and moved to China warehouse` : `${g.itemName} checked in at the China warehouse`);
   }
 
   async function duplicate(g: Good) {
@@ -147,5 +208,5 @@ export function useGoodsActions({ applyLocal = () => undefined, onChanged, onDup
     </>
   );
 
-  return { advance, moveTo, setCheckIn, duplicate, archive: setArchiveTarget, restore, dialogs };
+  return { advance, moveTo, setCheckIn, checkInAndMove, duplicate, archive: setArchiveTarget, restore, dialogs };
 }

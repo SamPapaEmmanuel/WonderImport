@@ -26,7 +26,12 @@ export class ApiError extends Error {
         return new ApiError(body.error.code, body.error.message, error.response!.status, body.error.fields ?? [], body.error.requestId);
       }
       if (!error.response) {
-        return new ApiError('NETWORK_ERROR', 'Cannot reach the WonderImport API. Check your connection, or that the API server is running.', 0);
+        const target = error.config?.baseURL ?? error.request?.responseURL ?? 'the configured API URL';
+        return new ApiError(
+          'NETWORK_ERROR',
+          `Cannot reach the WonderImport API at ${target}. Check your connection, that the API server is running (GET /api/health should return status ok), and that NEXT_PUBLIC_API_URL matches where the API listens.`,
+          0,
+        );
       }
       return new ApiError('HTTP_ERROR', `The server responded with ${error.response.status}.`, error.response.status);
     }

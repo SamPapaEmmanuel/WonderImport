@@ -1,38 +1,74 @@
 'use client';
 
-import { Check } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { dateTime } from '@/lib/format';
 import { CHECK_IN_EXPECTED } from '@/lib/status';
 import type { Good } from '@/lib/types';
+import { useSessionStore } from '@/stores/session-store';
 
-/** Done / Missing / Not yet, with a one-click "Check in" for staff once the good reaches the warehouse. */
-export function CheckInCell({ good, editable, onCheckIn }: { good: Good; editable: boolean; onCheckIn: (g: Good) => void }) {
+/**
+ * Tick-box check-in (Option A: a box on every row).
+ * Staff and administrators tick to confirm the China warehouse received the
+ * good. Only an administrator can untick to undo — staff see a locked box.
+ * Viewers and archived rows see text only.
+ */
+export function CheckInCell({ good, editable, onCheckIn }: { good: Good; editable: boolean; onCheckIn: (g: Good, checkedIn: boolean) => void }) {
+  const role = useSessionStore((s) => s.me?.role);
+  const canToggle = editable && !good.archivedAt;
+  const canUndo = role === 'ADMIN' && !good.archivedAt;
+  const checkedDetail = good.chinaCheckedInAt
+    ? `Checked in ${dateTime(good.chinaCheckedInAt)}${good.checkedInBy ? ` by ${good.checkedInBy.name}` : ''}`
+    : 'Checked in at the China warehouse';
+
   if (good.chinaCheckedIn) {
+    if (!canToggle) {
+      return (
+        <span className="inline-flex items-center gap-2 text-xs font-medium text-mint" title={checkedDetail}>
+          <span aria-hidden className="inline-block size-4 rounded-[5px] bg-mint text-center text-[10px] leading-4 text-white">
+            ✓
+          </span>
+          Done
+        </span>
+      );
+    }
     return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-mint" title={good.chinaCheckedInAt ? `Checked in ${dateTime(good.chinaCheckedInAt)}${good.checkedInBy ? ` by ${good.checkedInBy.name}` : ''}` : undefined}>
-        <Check className="size-3.5" aria-hidden /> Done
-      </span>
+      <label
+        className={cn('inline-flex items-center gap-2 text-xs font-medium text-mint', canUndo ? 'cursor-pointer' : 'cursor-not-allowed opacity-80')}
+        title={canUndo ? `${checkedDetail}. Untick to undo.` : `${checkedDetail}. Only an administrator can undo a check-in.`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked
+          disabled={!canUndo}
+          onChange={() => onCheckIn(good, false)}
+          className="size-4 accent-[var(--mint)] disabled:cursor-not-allowed"
+          aria-label={canUndo ? `Undo China check-in for ${good.itemName}` : `${good.itemName} checked in (only an administrator can undo)`}
+        />
+        Done
+      </label>
     );
   }
+
   const expected = CHECK_IN_EXPECTED.includes(good.status);
-  if (!expected) return <span className="text-xs text-ink-3">Not yet</span>;
-  if (!editable || good.archivedAt) return <span className="text-xs font-medium text-amber">Missing</span>;
+  if (!canToggle) {
+    return expected ? <span className="text-xs font-medium text-amber">Missing</span> : <span className="text-xs text-ink-3">Not yet</span>;
+  }
 
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onCheckIn(good);
-      }}
-      className={cn(
-        'inline-flex h-6 items-center gap-1 rounded-full border px-2.5 text-xs font-medium transition-colors',
-        good.status === 'CHINA_WAREHOUSE' ? 'border-line text-fjord hover:border-fjord hover:bg-glacier' : 'border-amber/40 bg-amber-bg text-amber hover:border-amber',
-      )}
-      title={good.status === 'CHINA_WAREHOUSE' ? 'Record that the warehouse received this good' : 'Check-in was missed. Record it now.'}
+    <label
+      className={cn('inline-flex cursor-pointer items-center gap-2 text-xs', expected && good.status !== 'CHINA_WAREHOUSE' ? 'font-medium text-amber' : 'text-ink-2')}
+      title={expected ? (good.status === 'CHINA_WAREHOUSE' ? 'Tick to confirm the warehouse received this good' : 'Check-in was missed. Tick to record it now.') : 'Tick to confirm this good has arrived at the warehouse'}
+      onClick={(e) => e.stopPropagation()}
     >
-      {good.status === 'CHINA_WAREHOUSE' ? 'Check in' : 'Missing, check in'}
-    </button>
+      <input
+        type="checkbox"
+        checked={false}
+        onChange={() => onCheckIn(good, true)}
+        className="size-4 cursor-pointer accent-[var(--fjord)]"
+        aria-label={`Confirm China check-in for ${good.itemName}`}
+      />
+      {expected ? (good.status === 'CHINA_WAREHOUSE' ? 'Check in' : 'Missing') : 'Not yet'}
+    </label>
   );
 }
