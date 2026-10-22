@@ -120,9 +120,8 @@
   --color-side-text: var(--side-text);
   --color-on-accent: var(--on-accent);
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-jet-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
-
+ --font-sans: Arial, Helvetica, ui-sans-serif, system-ui, sans-serif;
+--font-mono: "Courier New", ui-monospace, "SFMono-Regular", Menlo, monospace;
   --radius-panel: 18px;
   --radius-control: 12px;
 }
