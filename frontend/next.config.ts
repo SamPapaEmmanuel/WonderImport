@@ -42,6 +42,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   allowedDevOrigins: ['localhost:3000', '172.20.10.3:3000', '172.20.10.3'],
+  experimental: {
+    agentUpgrade: 'security',
+  },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
